@@ -105,11 +105,14 @@ class GestureController:
     def __init__(
         self,
         commit_release_frames=3,
-        open_palm_clear_frames=5
+        open_palm_clear_frames=5,
+        fist_hold_frames=5
     ):
         self.was_drawing = False
         self.release_frames = 0
         self.open_palm_frames = 0
+        self.fist_frames = 0
+        self.fist_fired = False
 
         self.commit_release_frames = (
             commit_release_frames
@@ -119,10 +122,16 @@ class GestureController:
             open_palm_clear_frames
         )
 
+        self.fist_hold_frames = (
+            fist_hold_frames
+        )
+
     def update(self, hand):
         if hand is None:
             self.release_frames = 0
             self.open_palm_frames = 0
+            self.fist_frames = 0
+            self.fist_fired = False
 
             if self.was_drawing:
                 self.release_frames += 1
@@ -140,6 +149,8 @@ class GestureController:
 
         if is_open_palm(hand):
             self.open_palm_frames += 1
+            self.fist_frames = 0
+            self.fist_fired = False
 
             if (
                 self.open_palm_frames
@@ -155,10 +166,23 @@ class GestureController:
             self.open_palm_frames = 0
 
         if is_closed_fist(hand):
+            self.fist_frames += 1
             self.was_drawing = False
             self.release_frames = 0
 
-            return "ENTER"
+            if (
+                not self.fist_fired
+                and self.fist_frames
+                >= self.fist_hold_frames
+            ):
+                self.fist_fired = True
+                return "ENTER"
+
+            return "FIST_HOLD"
+
+        else:
+            self.fist_frames = 0
+            self.fist_fired = False
 
         if is_drawing_gesture(hand):
             self.was_drawing = True

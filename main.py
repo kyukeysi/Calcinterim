@@ -1261,6 +1261,129 @@ def main():
                     "Current stroke cleared."
                 )
 
+            elif action == "ENTER":
+                if not training_mode:
+                    if integral_mode:
+                        lower_bound_text = "".join(
+                            lower_bound_tokens
+                        )
+
+                        upper_bound_text = "".join(
+                            upper_bound_tokens
+                        )
+
+                        if not math_engine.get_display_expression():
+                            answer = None
+                            integral_steps = None
+
+                            print(
+                                "Draw a function first."
+                            )
+
+                        elif not lower_bound_text:
+                            answer = None
+                            integral_steps = None
+
+                            print(
+                                "Lower bound is missing. "
+                                "Press A and draw it."
+                            )
+
+                        elif not upper_bound_text:
+                            answer = None
+                            integral_steps = None
+
+                            print(
+                                "Upper bound is missing. "
+                                "Press B and draw it."
+                            )
+
+                        else:
+                            lower_value = parse_bound(
+                                lower_bound_text
+                            )
+
+                            upper_value = parse_bound(
+                                upper_bound_text
+                            )
+
+                            if (
+                                lower_value is None
+                                or upper_value is None
+                            ):
+                                answer = None
+                                integral_steps = None
+
+                                print(
+                                    "Bounds must be numbers."
+                                )
+
+                            else:
+                                steps = (
+                                    math_engine
+                                    .get_definite_integral_steps(
+                                        lower_value,
+                                        upper_value
+                                    )
+                                )
+
+                                if steps is None:
+                                    answer = None
+                                    integral_steps = None
+
+                                    print(
+                                        "Could not calculate "
+                                        "definite integral:"
+                                        f" {math_engine.get_display_expression()}"
+                                    )
+
+                                else:
+                                    integral_steps = steps
+
+                                    answer = (
+                                        steps["result"]
+                                    )
+
+                                    print(
+                                        "Definite integral solved."
+                                    )
+
+                                    print(
+                                        "Antiderivative: "
+                                        f"{steps['antiderivative']}"
+                                    )
+
+                                    print(
+                                        f"F({upper_value}) - "
+                                        f"F({lower_value}) = "
+                                        f"{steps['upper_result']} - "
+                                        f"{steps['lower_result']}"
+                                    )
+
+                                    print(
+                                        f"Answer = "
+                                        f"{steps['result']}"
+                                    )
+
+                    else:
+                        answer = (
+                            math_engine
+                            .get_answer_text()
+                        )
+
+                        if answer is None:
+                            print(
+                                "Could not calculate "
+                                "expression:"
+                                f" {math_engine.get_display_expression()}"
+                            )
+
+                        else:
+                            print(
+                                f"{math_engine.get_display_expression()}"
+                                f" = {answer}"
+                            )
+
             elif action == "IDLE":
                 spell_ring.set_visible(
                     False
