@@ -1,9 +1,32 @@
+import json
 import math
+import os
 
 
 class StrokeRecognizer:
-    def __init__(self):
+    def __init__(
+        self,
+        template_file="recognition/user_templates.json"
+    ):
         self.sample_count = 32
+        self.template_file = template_file
+
+        self.symbols = [
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "+",
+            "-",
+            "×",
+            "÷",
+        ]
 
         self.templates = {
             "0": [
@@ -144,10 +167,17 @@ class StrokeRecognizer:
 
         self.templates = {
             symbol: self._resample(
-                self._normalize_template(points)
+                self._normalize_points(points)
             )
             for symbol, points in self.templates.items()
         }
+
+        self.user_templates = {
+            symbol: []
+            for symbol in self.symbols
+        }
+
+        self.load_user_templates()
 
     def recognize(self, stroke):
         if not stroke or len(stroke) < 8:
@@ -171,15 +201,31 @@ class StrokeRecognizer:
         best_symbol = None
         best_score = float("inf")
 
-        for symbol, template in self.templates.items():
-            score = self._distance(
-                resampled,
-                template
-            )
+        for symbol in self.symbols:
+            templates = self.user_templates[symbol]
 
-            if score < best_score:
-                best_score = score
-                best_symbol = symbol
+            if templates:
+                for template in templates:
+                    score = self._distance(
+                        resampled,
+                        template
+                    )
+
+                    if score < best_score:
+                        best_score = score
+                        best_symbol = symbol
+
+            else:
+                template = self.templates[symbol]
+
+                score = self._distance(
+                    resampled,
+                    template
+                )
+
+                if score < best_score:
+                    best_score = score
+                    best_symbol = symbol
 
         confidence = self._calculate_confidence(
             best_score
@@ -189,6 +235,159 @@ class StrokeRecognizer:
             return None
 
         return best_symbol
+
+    def add_template(self, symbol, stroke):
+        if symbol not in self.symbols:
+            raise ValueError(
+                f"Unsupported symbol: {symbol}"
+            )
+
+        if not stroke:
+            return False
+
+        points = self._convert_points(stroke)
+
+        if len(points) < 8:
+            return False
+
+        normalized = self._normalize_points(points)
+
+        if not normalized:
+            return False
+
+        resampled = self._resample(normalized)
+
+        if not resampled:
+            return False
+
+        self.user_templates[symbol].append(
+            resampled
+        )
+
+        self.save_user_templates()
+
+        return True
+
+    def clear_user_templates(self, symbol=None):
+        if symbol is None:
+            for current_symbol in self.symbols:
+                self.user_templates[current_symbol] = []
+        else:
+            if symbol not in self.symbols:
+                raise ValueError(
+                    f"Unsupported symbol: {symbol}"
+                )
+
+            self.user_templates[symbol] = []
+
+        self.save_user_templates()
+
+    def get_user_template_count(self, symbol=None):
+        if symbol is None:
+            return sum(
+                len(templates)
+                for templates in self.user_templates.values()
+            )
+
+        if symbol not in self.symbols:
+            return 0
+
+        return len(
+            self.user_templates[symbol]
+        )
+
+    def save_user_templates(self):
+        directory = os.path.dirname(
+            self.template_file
+        )
+
+        if directory:
+            os.makedirs(
+                directory,
+                exist_ok=True
+            )
+
+        data = {}
+
+        for symbol, templates in self.user_templates.items():
+            data[symbol] = [
+                [
+                    [float(x), float(y)]
+                    for x, y in template
+                ]
+                for template in templates
+            ]
+
+        with open(
+            self.template_file,
+            "w",
+            encoding="utf-8"
+        ) as file:
+            json.dump(
+                data,
+                file,
+                indent=2
+            )
+
+    def load_user_templates(self):
+        if not os.path.exists(
+            self.template_file
+        ):
+            return
+
+        try:
+            with open(
+                self.template_file,
+                "r",
+                encoding="utf-8"
+            ) as file:
+                data = json.load(file)
+
+        except (
+            OSError,
+            json.JSONDecodeError
+        ):
+            return
+
+        for symbol in self.symbols:
+            templates = data.get(
+                symbol,
+                []
+            )
+
+            if not isinstance(
+                templates,
+                list
+            ):
+                continue
+
+            loaded_templates = []
+
+            for template in templates:
+                try:
+                    points = [
+                        (
+                            float(point[0]),
+                            float(point[1])
+                        )
+                        for point in template
+                    ]
+
+                    if len(points) >= self.sample_count:
+                        loaded_templates.append(
+                            points[:self.sample_count]
+                        )
+
+                except (
+                    TypeError,
+                    ValueError,
+                    IndexError
+                ):
+                    continue
+
+            self.user_templates[symbol] = (
+                loaded_templates
+            )
 
     def _convert_points(self, stroke):
         points = []
@@ -200,25 +399,42 @@ class StrokeRecognizer:
             try:
                 x = float(point[0])
                 y = float(point[1])
-            except (TypeError, ValueError):
+
+            except (
+                TypeError,
+                ValueError
+            ):
                 continue
 
-            points.append((x, y))
+            points.append(
+                (x, y)
+            )
 
         return points
-
-    def _normalize_template(self, points):
-        return self._normalize_points(points)
 
     def _normalize_points(self, points):
         if not points:
             return []
 
-        min_x = min(point[0] for point in points)
-        max_x = max(point[0] for point in points)
+        min_x = min(
+            point[0]
+            for point in points
+        )
 
-        min_y = min(point[1] for point in points)
-        max_y = max(point[1] for point in points)
+        max_x = max(
+            point[0]
+            for point in points
+        )
+
+        min_y = min(
+            point[1]
+            for point in points
+        )
+
+        max_y = max(
+            point[1]
+            for point in points
+        )
 
         width = max_x - min_x
         height = max_y - min_y
@@ -226,7 +442,10 @@ class StrokeRecognizer:
         if width == 0 and height == 0:
             return []
 
-        scale = max(width, height)
+        scale = max(
+            width,
+            height
+        )
 
         normalized = []
 
@@ -256,13 +475,18 @@ class StrokeRecognizer:
             )
 
         if total_length == 0:
-            return points[:1] * self.sample_count
+            return (
+                points[:1]
+                * self.sample_count
+            )
 
         interval = total_length / (
             self.sample_count - 1
         )
 
-        result = [points[0]]
+        result = [
+            points[0]
+        ]
 
         previous = points[0]
         distance_since_last = 0.0
@@ -272,13 +496,16 @@ class StrokeRecognizer:
         while index < len(points):
             current = points[index]
 
-            segment_length = self._point_distance(
-                previous,
-                current
+            segment_length = (
+                self._point_distance(
+                    previous,
+                    current
+                )
             )
 
             if (
-                distance_since_last + segment_length
+                distance_since_last
+                + segment_length
                 >= interval
             ):
                 remaining = (
@@ -289,44 +516,73 @@ class StrokeRecognizer:
                 if segment_length == 0:
                     ratio = 0.0
                 else:
-                    ratio = remaining / segment_length
+                    ratio = (
+                        remaining
+                        / segment_length
+                    )
 
                 new_x = (
                     previous[0]
                     + ratio
-                    * (current[0] - previous[0])
+                    * (
+                        current[0]
+                        - previous[0]
+                    )
                 )
 
                 new_y = (
                     previous[1]
                     + ratio
-                    * (current[1] - previous[1])
+                    * (
+                        current[1]
+                        - previous[1]
+                    )
                 )
 
-                new_point = (new_x, new_y)
+                new_point = (
+                    new_x,
+                    new_y
+                )
 
-                result.append(new_point)
+                result.append(
+                    new_point
+                )
 
                 previous = new_point
                 distance_since_last = 0.0
 
             else:
-                distance_since_last += segment_length
+                distance_since_last += (
+                    segment_length
+                )
+
                 previous = current
                 index += 1
 
         while len(result) < self.sample_count:
-            result.append(points[-1])
+            result.append(
+                points[-1]
+            )
 
-        return result[:self.sample_count]
+        return result[
+            :self.sample_count
+        ]
 
-    def _point_distance(self, point_a, point_b):
+    def _point_distance(
+        self,
+        point_a,
+        point_b
+    ):
         return math.hypot(
             point_b[0] - point_a[0],
             point_b[1] - point_a[1]
         )
 
-    def _distance(self, points_a, points_b):
+    def _distance(
+        self,
+        points_a,
+        points_b
+    ):
         if not points_a or not points_b:
             return float("inf")
 
@@ -345,7 +601,10 @@ class StrokeRecognizer:
 
         return total / count
 
-    def _calculate_confidence(self, distance):
+    def _calculate_confidence(
+        self,
+        distance
+    ):
         return max(
             0.0,
             1.0 - distance * 2.2
