@@ -1,4 +1,8 @@
 import sympy as sp
+from sympy.parsing.sympy_parser import (
+    implicit_multiplication_application,
+    parse_expr,
+)
 
 
 class MathEngine:
@@ -43,11 +47,23 @@ class MathEngine:
             return None
 
         try:
-            return sp.sympify(
+            x = sp.Symbol("x")
+
+            return parse_expr(
                 expression,
-                locals={"x": sp.Symbol("x")}
+                local_dict={"x": x},
+                transformations=(
+                    implicit_multiplication_application
+                ),
+                evaluate=True
             )
-        except (sp.SympifyError, ValueError, TypeError):
+
+        except (
+            sp.SympifyError,
+            ValueError,
+            TypeError,
+            SyntaxError
+        ):
             return None
 
     def calculate(self):
@@ -58,7 +74,12 @@ class MathEngine:
 
         try:
             return sp.simplify(expression)
-        except (sp.SympifyError, ValueError, TypeError):
+
+        except (
+            sp.SympifyError,
+            ValueError,
+            TypeError
+        ):
             return None
 
     def get_answer_text(self):
@@ -82,9 +103,17 @@ class MathEngine:
             x = sp.Symbol("x")
 
             return sp.simplify(
-                sp.integrate(expression, x)
+                sp.integrate(
+                    expression,
+                    x
+                )
             )
-        except (sp.SympifyError, ValueError, TypeError):
+
+        except (
+            sp.SympifyError,
+            ValueError,
+            TypeError
+        ):
             return None
 
     def get_integral_text(self):
@@ -95,7 +124,11 @@ class MathEngine:
 
         return f"{integral} + C"
 
-    def definite_integral(self, lower_bound, upper_bound):
+    def definite_integral(
+        self,
+        lower_bound,
+        upper_bound
+    ):
         expression = self.parse()
 
         if expression is None:
@@ -111,7 +144,11 @@ class MathEngine:
 
             return sp.simplify(result)
 
-        except (sp.SympifyError, ValueError, TypeError):
+        except (
+            sp.SympifyError,
+            ValueError,
+            TypeError
+        ):
             return None
 
     def get_definite_integral_text(
@@ -143,7 +180,10 @@ class MathEngine:
             x = sp.Symbol("x")
 
             antiderivative = sp.simplify(
-                sp.integrate(expression, x)
+                sp.integrate(
+                    expression,
+                    x
+                )
             )
 
             lower_result = sp.simplify(
@@ -181,16 +221,25 @@ class MathEngine:
         ):
             return None
 
-    def is_equivalent(self, target_expression):
+    def is_equivalent(
+        self,
+        target_expression
+    ):
         current_expression = self.parse()
 
         if current_expression is None:
             return False
 
         try:
-            target = sp.sympify(
+            x = sp.Symbol("x")
+
+            target = parse_expr(
                 target_expression,
-                locals={"x": sp.Symbol("x")}
+                local_dict={"x": x},
+                transformations=(
+                    implicit_multiplication_application
+                ),
+                evaluate=True
             )
 
             difference = sp.simplify(
@@ -199,5 +248,10 @@ class MathEngine:
 
             return difference == 0
 
-        except (sp.SympifyError, ValueError, TypeError):
+        except (
+            sp.SympifyError,
+            ValueError,
+            TypeError,
+            SyntaxError
+        ):
             return False
