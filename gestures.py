@@ -17,7 +17,11 @@ def thumb_is_out(hand):
     thumb_tip = hand[4]
     index_mcp = hand[5]
 
-    hand_size = distance(wrist, hand[9])
+    hand_size = distance(
+        wrist,
+        hand[9]
+    )
+
     thumb_distance = distance(
         thumb_tip,
         index_mcp
@@ -56,11 +60,9 @@ def is_open_palm(hand):
 
 def is_closed_fist(hand):
     """
-    Detects a closed fist.
-
-    The four fingers should be folded toward
-    the palm, while the thumb is also close
-    to the palm.
+    Detects a closed fist by checking whether
+    the four main fingers are curled toward
+    the palm.
     """
 
     finger_pairs = [
@@ -73,32 +75,20 @@ def is_closed_fist(hand):
     folded_fingers = 0
 
     for tip, pip in finger_pairs:
-        if hand[tip].y > hand[pip].y:
+        tip_to_wrist = distance(
+            hand[tip],
+            hand[0]
+        )
+
+        pip_to_wrist = distance(
+            hand[pip],
+            hand[0]
+        )
+
+        if tip_to_wrist < pip_to_wrist:
             folded_fingers += 1
 
-    wrist = hand[0]
-
-    thumb_tip = hand[4]
-    index_mcp = hand[5]
-
-    hand_size = distance(
-        wrist,
-        hand[9]
-    )
-
-    thumb_distance = distance(
-        thumb_tip,
-        index_mcp
-    )
-
-    thumb_folded = (
-        thumb_distance < hand_size * 0.45
-    )
-
-    return (
-        folded_fingers >= 4
-        and thumb_folded
-    )
+    return folded_fingers >= 4
 
 
 class GestureController:
