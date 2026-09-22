@@ -49,13 +49,27 @@ class MathEngine:
         except (sp.SympifyError, ValueError, TypeError):
             return None
 
-    def simplify(self):
+    def calculate(self):
         expression = self.parse()
 
         if expression is None:
             return None
 
-        return sp.simplify(expression)
+        try:
+            return sp.simplify(expression)
+        except (sp.SympifyError, ValueError, TypeError):
+            return None
+
+    def get_answer_text(self):
+        answer = self.calculate()
+
+        if answer is None:
+            return None
+
+        return str(answer)
+
+    def simplify(self):
+        return self.calculate()
 
     def is_equivalent(self, target_expression):
         current_expression = self.parse()
