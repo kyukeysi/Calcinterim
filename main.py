@@ -24,7 +24,7 @@ from drawing.stroke_manager import StrokeManager
 from game.game_state import GameState
 from gestures import GestureController
 from hand_tracker import HandTracker
-from math.math_engine import MathEngine
+from calculator.math_engine import MathEngine
 from recognition.recognizer import StrokeRecognizer
 from ui.hud import HUD
 from ui.spell_ring import SpellRing
