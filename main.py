@@ -45,6 +45,8 @@ TRAINABLE_SYMBOLS = {
     ord("-"): "-",
     ord("*"): "×",
     ord("/"): "÷",
+    ord("x"): "x",
+    ord("^"): "^",
 }
 
 
@@ -218,22 +220,22 @@ def draw_training_ui(
 
     cv2.putText(
         frame,
-        "DRAW = SAVE   BACKSPACE = DELETE LAST   D = DELETE ALL",
+        "X = VARIABLE   ^ = POWER",
         (35, height - 70),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.48,
-        (255, 220, 120),
+        (180, 240, 255),
         1,
         cv2.LINE_AA
     )
 
     cv2.putText(
         frame,
-        "T = CALCULATOR   ESC = EXIT",
+        "DRAW = SAVE   BACKSPACE = DELETE LAST   D = DELETE ALL",
         (35, height - 40),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.48,
-        (200, 200, 200),
+        (255, 220, 120),
         1,
         cv2.LINE_AA
     )
