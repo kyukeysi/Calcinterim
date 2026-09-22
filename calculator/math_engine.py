@@ -72,30 +72,6 @@ class MathEngine:
     def simplify(self):
         return self.calculate()
 
-    def differentiate(self):
-        expression = self.parse()
-
-        if expression is None:
-            return None
-
-        try:
-            x = sp.Symbol("x")
-
-            return sp.simplify(
-                sp.diff(expression, x)
-            )
-
-        except (sp.SympifyError, ValueError, TypeError):
-            return None
-
-    def get_derivative_text(self):
-        derivative = self.differentiate()
-
-        if derivative is None:
-            return None
-
-        return str(derivative)
-
     def integrate(self):
         expression = self.parse()
 
@@ -108,7 +84,6 @@ class MathEngine:
             return sp.simplify(
                 sp.integrate(expression, x)
             )
-
         except (sp.SympifyError, ValueError, TypeError):
             return None
 
@@ -136,12 +111,7 @@ class MathEngine:
 
             return sp.simplify(result)
 
-        except (
-            sp.SympifyError,
-            ValueError,
-            TypeError,
-            ValueError
-        ):
+        except (sp.SympifyError, ValueError, TypeError):
             return None
 
     def get_definite_integral_text(
@@ -158,6 +128,58 @@ class MathEngine:
             return None
 
         return str(result)
+
+    def get_definite_integral_steps(
+        self,
+        lower_bound,
+        upper_bound
+    ):
+        expression = self.parse()
+
+        if expression is None:
+            return None
+
+        try:
+            x = sp.Symbol("x")
+
+            antiderivative = sp.simplify(
+                sp.integrate(expression, x)
+            )
+
+            lower_result = sp.simplify(
+                antiderivative.subs(
+                    x,
+                    lower_bound
+                )
+            )
+
+            upper_result = sp.simplify(
+                antiderivative.subs(
+                    x,
+                    upper_bound
+                )
+            )
+
+            result = sp.simplify(
+                upper_result - lower_result
+            )
+
+            return {
+                "integrand": expression,
+                "antiderivative": antiderivative,
+                "lower_bound": lower_bound,
+                "upper_bound": upper_bound,
+                "lower_result": lower_result,
+                "upper_result": upper_result,
+                "result": result
+            }
+
+        except (
+            sp.SympifyError,
+            ValueError,
+            TypeError
+        ):
+            return None
 
     def is_equivalent(self, target_expression):
         current_expression = self.parse()
