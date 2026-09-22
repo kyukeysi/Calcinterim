@@ -359,7 +359,7 @@ def draw_calculator_ui(
 
     cv2.putText(
         frame,
-        "ENTER = CALCULATE    C = CLEAR    Q = QUIT",
+        "BACKSPACE = DELETE LAST    ENTER = CALCULATE    C = CLEAR    Q = QUIT",
         (35, height - 45),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.5,
@@ -796,6 +796,24 @@ def main():
                             )
 
                 continue
+
+            if key == 8:
+                removed_token = (
+                    math_engine.remove_last_token()
+                )
+
+                if removed_token is not None:
+                    game_state.remove_last_token()
+                    answer = None
+
+                    print(
+                        "Deleted last token: "
+                        f"'{removed_token}'"
+                    )
+                else:
+                    print(
+                        "No tokens to delete."
+                    )
 
             if key == ord("c"):
                 stroke_manager.clear()
