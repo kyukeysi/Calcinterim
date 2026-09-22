@@ -1,6 +1,9 @@
+import os
 import time
 
 import cv2
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 from camera import Camera
 from config import (
@@ -50,22 +53,42 @@ TRAINABLE_SYMBOLS = {
 }
 
 
-def get_fingertip_position(hand, frame_width, frame_height):
+def get_fingertip_position(
+    hand,
+    frame_width,
+    frame_height
+):
     if hand is None:
         return None
 
     fingertip = hand[8]
 
-    x = int(fingertip.x * frame_width)
-    y = int(fingertip.y * frame_height)
+    x = int(
+        fingertip.x * frame_width
+    )
 
-    x = max(0, min(frame_width - 1, x))
-    y = max(0, min(frame_height - 1, y))
+    y = int(
+        fingertip.y * frame_height
+    )
+
+    x = max(
+        0,
+        min(frame_width - 1, x)
+    )
+
+    y = max(
+        0,
+        min(frame_height - 1, y)
+    )
 
     return x, y
 
 
-def draw_fingertip(frame, position, drawing):
+def draw_fingertip(
+    frame,
+    position,
+    drawing
+):
     if position is None:
         return
 
@@ -89,6 +112,7 @@ def draw_fingertip(frame, position, drawing):
             -1,
             cv2.LINE_AA
         )
+
     else:
         cv2.circle(
             frame,
@@ -100,7 +124,10 @@ def draw_fingertip(frame, position, drawing):
         )
 
 
-def draw_fps(frame, fps):
+def draw_fps(
+    frame,
+    fps
+):
     cv2.putText(
         frame,
         f"FPS: {fps:.1f}",
@@ -113,7 +140,228 @@ def draw_fps(frame, fps):
     )
 
 
-def draw_answer(frame, answer):
+def find_unicode_font():
+    candidates = [
+        "C:/Windows/Fonts/seguisym.ttf",
+        "C:/Windows/Fonts/segoeui.ttf",
+        "C:/Windows/Fonts/cambria.ttc",
+        "C:/Windows/Fonts/arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+    ]
+
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+
+    return None
+
+
+UNICODE_FONT_PATH = find_unicode_font()
+
+
+def draw_unicode_text(
+    frame,
+    text,
+    position,
+    font_size,
+    color,
+    stroke_width=0
+):
+    if UNICODE_FONT_PATH is None:
+        return False
+
+    try:
+        image = Image.fromarray(
+            cv2.cvtColor(
+                frame,
+                cv2.COLOR_BGR2RGB
+            )
+        )
+
+        draw = ImageDraw.Draw(image)
+
+        font = ImageFont.truetype(
+            UNICODE_FONT_PATH,
+            font_size
+        )
+
+        rgb_color = (
+            color[2],
+            color[1],
+            color[0]
+        )
+
+        draw.text(
+            position,
+            text,
+            font=font,
+            fill=rgb_color,
+            stroke_width=stroke_width,
+            stroke_fill=rgb_color
+        )
+
+        frame[:] = cv2.cvtColor(
+            np.array(image),
+            cv2.COLOR_RGB2BGR
+        )
+
+        return True
+
+    except Exception:
+        return False
+
+
+def format_math_expression(
+    value
+):
+    if value is None:
+        return ""
+
+    text = str(value)
+
+    text = text.replace(
+        "**2",
+        "²"
+    )
+
+    text = text.replace(
+        "**3",
+        "³"
+    )
+
+    text = text.replace(
+        "**4",
+        "⁴"
+    )
+
+    text = text.replace(
+        "**5",
+        "⁵"
+    )
+
+    text = text.replace(
+        "**6",
+        "⁶"
+    )
+
+    text = text.replace(
+        "**7",
+        "⁷"
+    )
+
+    text = text.replace(
+        "**8",
+        "⁸"
+    )
+
+    text = text.replace(
+        "**9",
+        "⁹"
+    )
+
+    text = text.replace(
+        "*",
+        ""
+    )
+
+    return text
+
+
+def draw_integral_expression(
+    frame,
+    expression,
+    lower_bound,
+    upper_bound
+):
+    """
+    Draws a visual definite-integral expression.
+
+    Example:
+
+        3
+        ∫ 8x dx
+        1
+    """
+
+    if not expression:
+        expression = "DRAW FUNCTION"
+
+    x = 35
+    y = 91
+
+    symbol_drawn = draw_unicode_text(
+        frame,
+        "∫",
+        (x, y - 18),
+        58,
+        (255, 255, 255)
+    )
+
+    if not symbol_drawn:
+        cv2.putText(
+            frame,
+            "S",
+            (x + 8, y + 30),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.2,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA
+        )
+
+    if lower_bound:
+        cv2.putText(
+            frame,
+            str(lower_bound),
+            (x + 8, y + 65),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.48,
+            (255, 220, 120),
+            1,
+            cv2.LINE_AA
+        )
+
+    if upper_bound:
+        cv2.putText(
+            frame,
+            str(upper_bound),
+            (x + 8, y - 2),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.48,
+            (255, 220, 120),
+            1,
+            cv2.LINE_AA
+        )
+
+    cv2.putText(
+        frame,
+        expression,
+        (x + 65, y + 30),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1.05,
+        (255, 255, 255),
+        3,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        "dx",
+        (x + 65, y + 62),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.55,
+        (200, 200, 200),
+        1,
+        cv2.LINE_AA
+    )
+
+
+def draw_answer(
+    frame,
+    answer
+):
     if answer is None:
         return
 
@@ -130,7 +378,9 @@ def draw_answer(frame, answer):
         cv2.LINE_AA
     )
 
-    answer_text = str(answer)
+    answer_text = format_math_expression(
+        answer
+    )
 
     cv2.putText(
         frame,
@@ -241,6 +491,172 @@ def draw_training_ui(
     )
 
 
+def draw_integral_steps(
+    frame,
+    steps,
+    answer
+):
+    height, width = frame.shape[:2]
+
+    if steps is None:
+        return
+
+    overlay = frame.copy()
+
+    panel_top = 245
+    panel_bottom = height - 105
+
+    cv2.rectangle(
+        overlay,
+        (15, panel_top),
+        (width - 15, panel_bottom),
+        (15, 15, 30),
+        -1
+    )
+
+    frame[:] = cv2.addWeighted(
+        overlay,
+        0.88,
+        frame,
+        0.12,
+        0
+    )
+
+    cv2.putText(
+        frame,
+        "CALCULUS STEPS",
+        (35, panel_top + 32),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.58,
+        (255, 220, 120),
+        1,
+        cv2.LINE_AA
+    )
+
+    integrand = format_math_expression(
+        steps["integrand"]
+    )
+
+    antiderivative = format_math_expression(
+        steps["antiderivative"]
+    )
+
+    lower_bound = steps["lower_bound"]
+    upper_bound = steps["upper_bound"]
+
+    lower_result = format_math_expression(
+        steps["lower_result"]
+    )
+
+    upper_result = format_math_expression(
+        steps["upper_result"]
+    )
+
+    result = format_math_expression(
+        steps["result"]
+    )
+
+    cv2.putText(
+        frame,
+        f"f(x) = {integrand}",
+        (35, panel_top + 65),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.58,
+        (220, 220, 220),
+        1,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        "ANTIDERIVATIVE",
+        (35, panel_top + 100),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.48,
+        (180, 180, 180),
+        1,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        f"F(x) = {antiderivative} + C",
+        (35, panel_top + 128),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.62,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        "DEFINITE INTEGRAL",
+        (35, panel_top + 163),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.48,
+        (180, 180, 180),
+        1,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        f"F({upper_bound}) - F({lower_bound})",
+        (35, panel_top + 193),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.68,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        f"{upper_result} - {lower_result}",
+        (35, panel_top + 225),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.62,
+        (220, 220, 220),
+        1,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        f"= {result}",
+        (35, panel_top + 258),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.82,
+        (180, 240, 255),
+        2,
+        cv2.LINE_AA
+    )
+
+    if answer is not None:
+        cv2.putText(
+            frame,
+            "FINAL ANSWER",
+            (width - 250, panel_top + 65),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.48,
+            (255, 220, 120),
+            1,
+            cv2.LINE_AA
+        )
+
+        cv2.putText(
+            frame,
+            format_math_expression(answer),
+            (width - 250, panel_top + 110),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.2,
+            (180, 240, 255),
+            3,
+            cv2.LINE_AA
+        )
+
+
 def draw_calculator_ui(
     frame,
     expression,
@@ -248,13 +664,17 @@ def draw_calculator_ui(
     integral_mode,
     lower_bound,
     upper_bound,
-    bound_mode
+    bound_mode,
+    integral_steps
 ):
     height, width = frame.shape[:2]
 
-    overlay = frame.copy()
+    if integral_mode:
+        panel_height = 225
+    else:
+        panel_height = 245
 
-    panel_height = 285 if integral_mode else 245
+    overlay = frame.copy()
 
     cv2.rectangle(
         overlay,
@@ -290,6 +710,145 @@ def draw_calculator_ui(
         cv2.LINE_AA
     )
 
+    if integral_mode:
+        cv2.putText(
+            frame,
+            "INTEGRAND",
+            (35, 82),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.52,
+            (180, 180, 180),
+            1,
+            cv2.LINE_AA
+        )
+
+        draw_integral_expression(
+            frame,
+            expression,
+            lower_bound,
+            upper_bound
+        )
+
+        if bound_mode == "lower":
+            status = "DRAW LOWER BOUND  A"
+            status_color = (255, 220, 120)
+        elif bound_mode == "upper":
+            status = "DRAW UPPER BOUND  B"
+            status_color = (255, 220, 120)
+        elif lower_bound and upper_bound:
+            status = "BOUNDS READY  -> PRESS ENTER"
+            status_color = (180, 240, 255)
+        elif expression:
+            status = "PRESS A = LOWER   B = UPPER"
+            status_color = (200, 200, 200)
+        else:
+            status = "DRAW THE FUNCTION FIRST"
+            status_color = (200, 200, 200)
+
+        cv2.putText(
+            frame,
+            status,
+            (35, 165),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.52,
+            status_color,
+            1,
+            cv2.LINE_AA
+        )
+
+        cv2.putText(
+            frame,
+            "1. DRAW FUNCTION   2. A = LOWER   3. B = UPPER",
+            (35, 190),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (200, 200, 200),
+            1,
+            cv2.LINE_AA
+        )
+
+        cv2.putText(
+            frame,
+            "ENTER = SOLVE   C = CLEAR   I = EXIT",
+            (35, 215),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (255, 220, 120),
+            1,
+            cv2.LINE_AA
+        )
+
+        cv2.putText(
+            frame,
+            "BACKSPACE = DELETE LAST",
+            (400, 215),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            (200, 200, 200),
+            1,
+            cv2.LINE_AA
+        )
+
+        if integral_steps is not None:
+            draw_integral_steps(
+                frame,
+                integral_steps,
+                answer
+            )
+        else:
+            cv2.putText(
+                frame,
+                "RESULT",
+                (35, height - 75),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.48,
+                (180, 180, 180),
+                1,
+                cv2.LINE_AA
+            )
+
+            if answer is None:
+                answer_text = "—"
+            else:
+                answer_text = format_math_expression(
+                    answer
+                )
+
+            cv2.putText(
+                frame,
+                answer_text,
+                (130, height - 73),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.72,
+                (180, 240, 255),
+                2,
+                cv2.LINE_AA
+            )
+
+            cv2.putText(
+                frame,
+                "T = TRAINING MODE",
+                (35, height - 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.48,
+                (200, 200, 200),
+                1,
+                cv2.LINE_AA
+            )
+
+            cv2.putText(
+                frame,
+                "Q = QUIT",
+                (230, height - 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.48,
+                (255, 220, 120),
+                1,
+                cv2.LINE_AA
+            )
+
+        return
+
     cv2.putText(
         frame,
         "EXPRESSION",
@@ -306,24 +865,6 @@ def draw_calculator_ui(
         if expression
         else "DRAW A NUMBER OR OPERATOR"
     )
-
-    if integral_mode:
-        lower_text = (
-            lower_bound
-            if lower_bound
-            else "?"
-        )
-
-        upper_text = (
-            upper_bound
-            if upper_bound
-            else "?"
-        )
-
-        expression_text = (
-            f"INT [{lower_text},{upper_text}] "
-            f"{expression_text}"
-        )
 
     expression_size = 1.05
 
@@ -345,117 +886,6 @@ def draw_calculator_ui(
         cv2.LINE_AA
     )
 
-    if integral_mode:
-        bound_text = (
-            "LOWER = A"
-            if bound_mode == "lower"
-            else "UPPER = B"
-            if bound_mode == "upper"
-            else "A = LOWER    B = UPPER"
-        )
-
-        cv2.putText(
-            frame,
-            bound_text,
-            (35, 165),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            (255, 220, 120),
-            1,
-            cv2.LINE_AA
-        )
-
-        cv2.putText(
-            frame,
-            "DRAW NUMBERS AFTER A/B TO SET THE BOUNDS",
-            (35, 195),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.48,
-            (200, 200, 200),
-            1,
-            cv2.LINE_AA
-        )
-
-        cv2.putText(
-            frame,
-            "ENTER = INTEGRATE    C = CLEAR    I = EXIT INTEGRAL",
-            (35, 225),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.48,
-            (255, 220, 120),
-            1,
-            cv2.LINE_AA
-        )
-
-        cv2.putText(
-            frame,
-            "BACKSPACE = DELETE LAST",
-            (35, 250),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.48,
-            (200, 200, 200),
-            1,
-            cv2.LINE_AA
-        )
-
-        cv2.putText(
-            frame,
-            "ANSWER",
-            (35, 278),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.52,
-            (255, 220, 120),
-            1,
-            cv2.LINE_AA
-        )
-
-        if answer is None:
-            answer_text = "—"
-        else:
-            answer_text = str(answer)
-
-        answer_size = 1.2
-
-        if len(answer_text) > 18:
-            answer_size = 0.9
-        elif len(answer_text) > 12:
-            answer_size = 1.05
-
-        cv2.putText(
-            frame,
-            answer_text,
-            (190, 278),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            answer_size,
-            (180, 240, 255),
-            2,
-            cv2.LINE_AA
-        )
-
-        cv2.putText(
-            frame,
-            "T = TRAINING MODE",
-            (35, height - 75),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (200, 200, 200),
-            1,
-            cv2.LINE_AA
-        )
-
-        cv2.putText(
-            frame,
-            "Q = QUIT",
-            (35, height - 45),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (255, 220, 120),
-            1,
-            cv2.LINE_AA
-        )
-
-        return
-
     cv2.putText(
         frame,
         "ANSWER",
@@ -470,7 +900,9 @@ def draw_calculator_ui(
     if answer is None:
         answer_text = "—"
     else:
-        answer_text = str(answer)
+        answer_text = format_math_expression(
+            answer
+        )
 
     answer_size = 1.35
 
@@ -513,7 +945,9 @@ def draw_calculator_ui(
     )
 
 
-def parse_bound(bound_text):
+def parse_bound(
+    bound_text
+):
     if not bound_text:
         return None
 
@@ -526,6 +960,18 @@ def parse_bound(bound_text):
         return float(bound_text)
     except ValueError:
         return None
+
+
+def clear_visuals(
+    stroke_manager,
+    glow_renderer,
+    particle_system,
+    spell_ring
+):
+    stroke_manager.clear()
+    glow_renderer.clear()
+    particle_system.clear()
+    spell_ring.set_visible(False)
 
 
 def main():
@@ -573,12 +1019,14 @@ def main():
         spell_ring = SpellRing()
 
         answer = None
+        integral_steps = None
 
         training_mode = False
         selected_training_symbol = None
 
         integral_mode = False
         integral_bound_mode = None
+
         lower_bound_tokens = []
         upper_bound_tokens = []
 
@@ -614,7 +1062,9 @@ def main():
                 )
                 break
 
-            frame_height, frame_width = frame.shape[:2]
+            frame_height, frame_width = (
+                frame.shape[:2]
+            )
 
             timestamp_ms = int(
                 current_time * 1000
@@ -650,6 +1100,7 @@ def main():
                         stroke_manager.begin(
                             fingertip_position
                         )
+
                     else:
                         points = (
                             stroke_manager.get_points()
@@ -706,6 +1157,7 @@ def main():
                                     f"'{selected_training_symbol}' "
                                     f"example #{count}"
                                 )
+
                             else:
                                 print(
                                     "Training stroke "
@@ -728,7 +1180,8 @@ def main():
                         if token is not None:
                             if (
                                 integral_mode
-                                and integral_bound_mode == "lower"
+                                and integral_bound_mode
+                                == "lower"
                             ):
                                 lower_bound_tokens.append(
                                     token
@@ -741,7 +1194,8 @@ def main():
 
                             elif (
                                 integral_mode
-                                and integral_bound_mode == "upper"
+                                and integral_bound_mode
+                                == "upper"
                             ):
                                 upper_bound_tokens.append(
                                     token
@@ -762,6 +1216,7 @@ def main():
                                 )
 
                                 answer = None
+                                integral_steps = None
 
                                 print(
                                     "Stroke committed: "
@@ -792,9 +1247,11 @@ def main():
 
                     lower_bound_tokens.clear()
                     upper_bound_tokens.clear()
+
                     integral_bound_mode = None
 
                     answer = None
+                    integral_steps = None
 
                 spell_ring.set_visible(
                     False
@@ -864,7 +1321,8 @@ def main():
                     integral_mode,
                     lower_bound_text,
                     upper_bound_text,
-                    integral_bound_mode
+                    integral_bound_mode,
+                    integral_steps
                 )
 
             if SHOW_FPS:
@@ -891,9 +1349,12 @@ def main():
                     training_mode = False
                     selected_training_symbol = None
 
-                    stroke_manager.clear()
-                    glow_renderer.clear()
-                    particle_system.clear()
+                    clear_visuals(
+                        stroke_manager,
+                        glow_renderer,
+                        particle_system,
+                        spell_ring
+                    )
 
                     print(
                         "Exited training mode."
@@ -907,10 +1368,14 @@ def main():
                     upper_bound_tokens.clear()
 
                     answer = None
+                    integral_steps = None
 
-                    stroke_manager.clear()
-                    glow_renderer.clear()
-                    particle_system.clear()
+                    clear_visuals(
+                        stroke_manager,
+                        glow_renderer,
+                        particle_system,
+                        spell_ring
+                    )
 
                     print(
                         "Exited integral mode."
@@ -929,18 +1394,26 @@ def main():
                 lower_bound_tokens.clear()
                 upper_bound_tokens.clear()
 
-                stroke_manager.clear()
-                glow_renderer.clear()
-                particle_system.clear()
+                answer = None
+                integral_steps = None
+
+                clear_visuals(
+                    stroke_manager,
+                    glow_renderer,
+                    particle_system,
+                    spell_ring
+                )
 
                 if training_mode:
                     print(
                         "Entered training mode."
                     )
+
                     print(
                         "Press a symbol key "
                         "before drawing it."
                     )
+
                 else:
                     print(
                         "Exited training mode."
@@ -971,6 +1444,7 @@ def main():
                             "Select a symbol before "
                             "deleting a training example."
                         )
+
                     else:
                         deleted = (
                             recognizer.delete_last_template(
@@ -992,6 +1466,7 @@ def main():
                                 f"'{selected_training_symbol}'. "
                                 f"{count} remaining."
                             )
+
                         else:
                             print(
                                 "No saved training examples "
@@ -1004,6 +1479,7 @@ def main():
                             "Select a symbol before "
                             "deleting training examples."
                         )
+
                     else:
                         count = (
                             recognizer
@@ -1022,6 +1498,7 @@ def main():
                                 f"{count} training examples "
                                 f"for '{selected_training_symbol}'."
                             )
+
                         else:
                             print(
                                 "No saved training examples "
@@ -1032,33 +1509,46 @@ def main():
 
             if key == ord("i"):
                 integral_mode = not integral_mode
+
                 integral_bound_mode = None
 
                 lower_bound_tokens.clear()
                 upper_bound_tokens.clear()
 
                 answer = None
+                integral_steps = None
 
-                stroke_manager.clear()
-                glow_renderer.clear()
-                particle_system.clear()
+                clear_visuals(
+                    stroke_manager,
+                    glow_renderer,
+                    particle_system,
+                    spell_ring
+                )
 
                 if integral_mode:
                     print(
                         "Entered integral mode."
                     )
+
                     print(
-                        "Draw the integrand normally."
+                        "Draw the function first."
                     )
+
                     print(
-                        "Press A for lower bound."
+                        "Press A, then draw the "
+                        "lower bound."
                     )
+
                     print(
-                        "Press B for upper bound."
+                        "Press B, then draw the "
+                        "upper bound."
                     )
+
                     print(
-                        "Press ENTER to integrate."
+                        "Press ENTER to solve "
+                        "the definite integral."
                     )
+
                 else:
                     print(
                         "Exited integral mode."
@@ -1067,12 +1557,14 @@ def main():
             if integral_mode:
                 if key == ord("a"):
                     integral_bound_mode = "lower"
+
                     print(
                         "Lower bound selected."
                     )
 
                 elif key == ord("b"):
                     integral_bound_mode = "upper"
+
                     print(
                         "Upper bound selected."
                     )
@@ -1084,10 +1576,14 @@ def main():
                                 lower_bound_tokens.pop()
                             )
 
+                            answer = None
+                            integral_steps = None
+
                             print(
                                 "Deleted lower bound token: "
                                 f"'{removed}'"
                             )
+
                         else:
                             print(
                                 "Lower bound is empty."
@@ -1099,10 +1595,14 @@ def main():
                                 upper_bound_tokens.pop()
                             )
 
+                            answer = None
+                            integral_steps = None
+
                             print(
                                 "Deleted upper bound token: "
                                 f"'{removed}'"
                             )
+
                         else:
                             print(
                                 "Upper bound is empty."
@@ -1115,12 +1615,15 @@ def main():
 
                         if removed_token is not None:
                             game_state.remove_last_token()
+
                             answer = None
+                            integral_steps = None
 
                             print(
                                 "Deleted last token: "
                                 f"'{removed_token}'"
                             )
+
                         else:
                             print(
                                 "No tokens to delete."
@@ -1138,7 +1641,9 @@ def main():
                     upper_bound_tokens.clear()
 
                     integral_bound_mode = None
+
                     answer = None
+                    integral_steps = None
 
                     spell_ring.set_visible(
                         False
@@ -1157,10 +1662,33 @@ def main():
                         upper_bound_tokens
                     )
 
-                    if (
-                        lower_bound_text
-                        and upper_bound_text
-                    ):
+                    if not math_engine.get_display_expression():
+                        answer = None
+                        integral_steps = None
+
+                        print(
+                            "Draw a function first."
+                        )
+
+                    elif not lower_bound_text:
+                        answer = None
+                        integral_steps = None
+
+                        print(
+                            "Lower bound is missing. "
+                            "Press A and draw it."
+                        )
+
+                    elif not upper_bound_text:
+                        answer = None
+                        integral_steps = None
+
+                        print(
+                            "Upper bound is missing. "
+                            "Press B and draw it."
+                        )
+
+                    else:
                         lower_value = parse_bound(
                             lower_bound_text
                         )
@@ -1174,53 +1702,58 @@ def main():
                             or upper_value is None
                         ):
                             answer = None
+                            integral_steps = None
 
                             print(
                                 "Bounds must be numbers."
                             )
 
                         else:
-                            answer = (
+                            steps = (
                                 math_engine
-                                .get_definite_integral_text(
+                                .get_definite_integral_steps(
                                     lower_value,
                                     upper_value
                                 )
                             )
 
-                            if answer is None:
+                            if steps is None:
+                                answer = None
+                                integral_steps = None
+
                                 print(
                                     "Could not calculate "
                                     "definite integral:"
                                     f" {math_engine.get_display_expression()}"
                                 )
+
                             else:
-                                print(
-                                    f"Integral from "
-                                    f"{lower_value} to "
-                                    f"{upper_value} of "
-                                    f"{math_engine.get_display_expression()}"
-                                    f" = {answer}"
+                                integral_steps = steps
+
+                                answer = (
+                                    steps["result"]
                                 )
 
-                    else:
-                        answer = (
-                            math_engine
-                            .get_integral_text()
-                        )
+                                print(
+                                    "Definite integral solved."
+                                )
 
-                        if answer is None:
-                            print(
-                                "Could not calculate "
-                                "integral:"
-                                f" {math_engine.get_display_expression()}"
-                            )
-                        else:
-                            print(
-                                f"Integral of "
-                                f"{math_engine.get_display_expression()}"
-                                f" = {answer}"
-                            )
+                                print(
+                                    "Antiderivative: "
+                                    f"{steps['antiderivative']}"
+                                )
+
+                                print(
+                                    f"F({upper_value}) - "
+                                    f"F({lower_value}) = "
+                                    f"{steps['upper_result']} - "
+                                    f"{steps['lower_result']}"
+                                )
+
+                                print(
+                                    f"Answer = "
+                                    f"{steps['result']}"
+                                )
 
                 continue
 
@@ -1231,12 +1764,15 @@ def main():
 
                 if removed_token is not None:
                     game_state.remove_last_token()
+
                     answer = None
+                    integral_steps = None
 
                     print(
                         "Deleted last token: "
                         f"'{removed_token}'"
                     )
+
                 else:
                     print(
                         "No tokens to delete."
@@ -1246,10 +1782,12 @@ def main():
                 stroke_manager.clear()
                 glow_renderer.clear()
                 particle_system.clear()
+
                 math_engine.clear()
                 game_state.clear_tokens()
 
                 answer = None
+                integral_steps = None
 
                 spell_ring.set_visible(
                     False
@@ -1271,6 +1809,7 @@ def main():
                         "expression:"
                         f" {math_engine.get_display_expression()}"
                     )
+
                 else:
                     print(
                         f"{math_engine.get_display_expression()}"
