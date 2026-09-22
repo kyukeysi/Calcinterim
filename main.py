@@ -152,7 +152,7 @@ def draw_training_ui(
     cv2.rectangle(
         overlay,
         (15, 15),
-        (width - 15, 145),
+        (width - 15, 170),
         (20, 20, 35),
         -1
     )
@@ -206,7 +206,7 @@ def draw_training_ui(
     cv2.putText(
         frame,
         "0-9 = NUMBER   +/- = OPERATOR   * = MULTIPLY   / = DIVIDE",
-        (35, height - 75),
+        (35, height - 100),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.48,
         (200, 200, 200),
@@ -216,8 +216,19 @@ def draw_training_ui(
 
     cv2.putText(
         frame,
-        "DRAW = SAVE EXAMPLE   T = CALCULATOR   ESC = EXIT",
-        (35, height - 45),
+        "DRAW = SAVE   BACKSPACE = DELETE LAST   D = DELETE ALL",
+        (35, height - 70),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.48,
+        (255, 220, 120),
+        1,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        "T = CALCULATOR   ESC = EXIT",
+        (35, height - 40),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.48,
         (200, 200, 200),
@@ -527,6 +538,7 @@ def main():
                 )
 
             particle_system.update()
+
             spell_ring.update(
                 delta_time
             )
@@ -644,6 +656,69 @@ def main():
                         f"'{selected_training_symbol}' "
                         f"({count} saved examples)"
                     )
+
+                elif key == 8:
+                    if selected_training_symbol is None:
+                        print(
+                            "Select a symbol before "
+                            "deleting a training example."
+                        )
+                    else:
+                        deleted = (
+                            recognizer.delete_last_template(
+                                selected_training_symbol
+                            )
+                        )
+
+                        if deleted:
+                            count = (
+                                recognizer
+                                .get_user_template_count(
+                                    selected_training_symbol
+                                )
+                            )
+
+                            print(
+                                "Deleted last training "
+                                f"example for "
+                                f"'{selected_training_symbol}'. "
+                                f"{count} remaining."
+                            )
+                        else:
+                            print(
+                                "No saved training examples "
+                                f"for '{selected_training_symbol}'."
+                            )
+
+                elif key == ord("d"):
+                    if selected_training_symbol is None:
+                        print(
+                            "Select a symbol before "
+                            "deleting training examples."
+                        )
+                    else:
+                        count = (
+                            recognizer
+                            .get_user_template_count(
+                                selected_training_symbol
+                            )
+                        )
+
+                        if count > 0:
+                            recognizer.clear_user_templates(
+                                selected_training_symbol
+                            )
+
+                            print(
+                                "Deleted all "
+                                f"{count} training examples "
+                                f"for '{selected_training_symbol}'."
+                            )
+                        else:
+                            print(
+                                "No saved training examples "
+                                f"for '{selected_training_symbol}'."
+                            )
 
                 continue
 

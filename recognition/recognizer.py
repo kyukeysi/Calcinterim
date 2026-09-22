@@ -268,10 +268,26 @@ class StrokeRecognizer:
 
         return True
 
+    def delete_last_template(self, symbol):
+        if symbol not in self.symbols:
+            raise ValueError(
+                f"Unsupported symbol: {symbol}"
+            )
+
+        if not self.user_templates[symbol]:
+            return False
+
+        self.user_templates[symbol].pop()
+
+        self.save_user_templates()
+
+        return True
+
     def clear_user_templates(self, symbol=None):
         if symbol is None:
             for current_symbol in self.symbols:
                 self.user_templates[current_symbol] = []
+
         else:
             if symbol not in self.symbols:
                 raise ValueError(
