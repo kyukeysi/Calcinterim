@@ -24,7 +24,9 @@ from config import (
 from drawing.glow import GlowRenderer
 from drawing.particles import ParticleSystem
 from drawing.stroke_manager import StrokeManager
+from game.challenge_pool import get_random_problem
 from game.game_state import GameState
+from game.timer import GameTimer
 from gestures import GestureController
 from hand_tracker import HandTracker
 from calculator.math_engine import MathEngine
@@ -657,6 +659,158 @@ def draw_integral_steps(
         )
 
 
+def draw_challenge_ui(
+    frame,
+    problem,
+    time_remaining,
+    challenge_score,
+    numbers_entered,
+    answer=None,
+    result_text=None,
+    wrong_answer=False
+):
+    """
+    Draws the minimal integral challenge UI overlay directly onto the frame.
+    Only displays:
+      1. Given (the integral problem)
+      2. Score
+      3. Timer
+      4. Numbers entered
+    No background color or rectangle is rendered behind the text.
+    """
+    height, width = frame.shape[:2]
+
+    def put_clean_text(text, pos, scale=0.75, color=(255, 255, 255), thickness=2):
+        cv2.putText(
+            frame,
+            text,
+            pos,
+            cv2.FONT_HERSHEY_SIMPLEX,
+            scale,
+            (0, 0, 0),
+            thickness + 2,
+            cv2.LINE_AA
+        )
+        cv2.putText(
+            frame,
+            text,
+            pos,
+            cv2.FONT_HERSHEY_SIMPLEX,
+            scale,
+            color,
+            thickness,
+            cv2.LINE_AA
+        )
+
+    # 1. GIVEN
+    problem_display = problem["display"] if problem else "-"
+    given_text = f"GIVEN: {problem_display}"
+    put_clean_text(
+        given_text,
+        (30, 45),
+        scale=0.75,
+        color=(255, 255, 255),
+        thickness=2
+    )
+
+    # 2. SCORE
+    score_text = f"SCORE: {challenge_score}"
+    put_clean_text(
+        score_text,
+        (width - 320, 45),
+        scale=0.75,
+        color=(180, 240, 255),
+        thickness=2
+    )
+
+    # 3. TIMER
+    time_seconds = int(time_remaining + 0.999)
+    timer_text = f"TIME: {time_seconds}s"
+    if time_seconds > 30:
+        timer_color = (255, 255, 255)
+    elif time_seconds > 15:
+        timer_color = (120, 220, 255)
+    else:
+        timer_color = (100, 100, 255)
+
+    put_clean_text(
+        timer_text,
+        (width - 150, 45),
+        scale=0.75,
+        color=timer_color,
+        thickness=2
+    )
+
+    # 4. NUMBERS ENTERED
+    if numbers_entered:
+        entered_display = numbers_entered
+        if answer is not None:
+            entered_display += f" = {answer}"
+    else:
+        entered_display = "_"
+
+    entered_text = f"ENTERED: {entered_display}"
+    if wrong_answer and result_text is None:
+        entered_text += "  (INCORRECT)"
+        entered_color = (100, 140, 255)
+    else:
+        entered_color = (130, 255, 200)
+
+    put_clean_text(
+        entered_text,
+        (30, 85),
+        scale=0.75,
+        color=entered_color,
+        thickness=2
+    )
+
+    # Result notification in the center of the frame (no background box)
+    if result_text is not None:
+        if result_text == "WIN":
+            main_text = "CORRECT!"
+            sub_text = f"+1 POINT! Score: {challenge_score}"
+            main_color = (100, 255, 100)
+        else:
+            main_text = "TIME'S UP!"
+            ans_str = problem["answer"] if problem else "?"
+            sub_text = f"Expected answer: {ans_str}"
+            main_color = (80, 80, 255)
+
+        main_size = cv2.getTextSize(
+            main_text,
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.8,
+            3
+        )[0]
+        main_x = (width - main_size[0]) // 2
+        main_y = height // 2 - 10
+
+        put_clean_text(
+            main_text,
+            (main_x, main_y),
+            scale=1.8,
+            color=main_color,
+            thickness=3
+        )
+
+        sub_size = cv2.getTextSize(
+            sub_text,
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.85,
+            2
+        )[0]
+        sub_x = (width - sub_size[0]) // 2
+        sub_y = main_y + 45
+
+        put_clean_text(
+            sub_text,
+            (sub_x, sub_y),
+            scale=0.85,
+            color=(240, 240, 240),
+            thickness=2
+        )
+
+
 def draw_calculator_ui(
     frame,
     expression,
@@ -1030,6 +1184,15 @@ def main():
         lower_bound_tokens = []
         upper_bound_tokens = []
 
+        challenge_mode = False
+        challenge_timer = GameTimer(
+            duration=60
+        )
+        challenge_problem = None
+        challenge_result = None
+        challenge_result_time = None
+        challenge_wrong_answer = False
+
         previous_timestamp = 0
         previous_time = time.monotonic()
         fps = 0.0
@@ -1217,6 +1380,7 @@ def main():
 
                                 answer = None
                                 integral_steps = None
+                                challenge_wrong_answer = False
 
                                 print(
                                     "Stroke committed: "
@@ -1252,6 +1416,7 @@ def main():
 
                     answer = None
                     integral_steps = None
+                    challenge_wrong_answer = False
 
                 spell_ring.set_visible(
                     False
@@ -1279,6 +1444,23 @@ def main():
                             print(
                                 "Draw a function first."
                             )
+
+                        elif challenge_mode and not lower_bound_text and not upper_bound_text:
+                            answer = (
+                                math_engine
+                                .get_answer_text()
+                            )
+
+                            if answer is None:
+                                print(
+                                    "Could not evaluate expression: "
+                                    f"{math_engine.get_display_expression()}"
+                                )
+                            else:
+                                print(
+                                    "Challenge answer submitted: "
+                                    f"{math_engine.get_display_expression()} = {answer}"
+                                )
 
                         elif not lower_bound_text:
                             answer = None
@@ -1389,6 +1571,122 @@ def main():
                     False
                 )
 
+            if challenge_mode:
+                if challenge_result is not None:
+                    if challenge_result_time is not None:
+                        elapsed = (
+                            time.monotonic()
+                            - challenge_result_time
+                        )
+
+                        if elapsed >= 3.0:
+                            if (
+                                challenge_result
+                                == "WIN"
+                            ):
+                                challenge_problem = (
+                                    get_random_problem(
+                                        exclude=(
+                                            challenge_problem
+                                        )
+                                    )
+                                )
+
+                                game_state.start_challenge(
+                                    challenge_problem
+                                )
+
+                                challenge_timer.reset()
+                                challenge_timer.set_duration(
+                                    60
+                                )
+                                challenge_timer.start()
+
+                                challenge_result = None
+                                challenge_result_time = (
+                                    None
+                                )
+                                challenge_wrong_answer = False
+
+                                math_engine.clear()
+                                game_state.clear_tokens()
+
+                                lower_bound_tokens.clear()
+                                upper_bound_tokens.clear()
+
+                                integral_bound_mode = None
+
+                                answer = None
+                                integral_steps = None
+
+                                clear_visuals(
+                                    stroke_manager,
+                                    glow_renderer,
+                                    particle_system,
+                                    spell_ring
+                                )
+
+                                print(
+                                    "New challenge! "
+                                    f"{challenge_problem['display']}"
+                                )
+
+                            else:
+                                challenge_mode = False
+                                challenge_result = None
+                                challenge_result_time = (
+                                    None
+                                )
+                                challenge_wrong_answer = False
+
+                                challenge_timer.reset()
+
+                                game_state.reset_challenge()
+
+                                print(
+                                    "Challenge ended. "
+                                    "Back to integral mode."
+                                )
+
+                elif (
+                    challenge_timer.is_expired()
+                ):
+                    challenge_result = "LOSE"
+                    challenge_result_time = (
+                        time.monotonic()
+                    )
+                    challenge_wrong_answer = False
+
+                    challenge_timer.stop()
+
+                    game_state.set_challenge_lose()
+
+                    print(
+                        "Time's up! Challenge failed."
+                    )
+
+                elif answer is not None:
+                    if game_state.check_challenge_answer(
+                        answer
+                    ):
+                        challenge_result = "WIN"
+                        challenge_result_time = (
+                            time.monotonic()
+                        )
+                        challenge_wrong_answer = False
+
+                        challenge_timer.stop()
+
+                        game_state.set_challenge_win()
+
+                        print(
+                            "Correct! Challenge won! "
+                            f"Score: {game_state.challenge_score}"
+                        )
+
+                    else:
+                        challenge_wrong_answer = True
+
             particle_system.update()
 
             spell_ring.update(
@@ -1437,16 +1735,31 @@ def main():
                     upper_bound_tokens
                 )
 
-                draw_calculator_ui(
-                    frame,
-                    math_engine.get_display_expression(),
-                    answer,
-                    integral_mode,
-                    lower_bound_text,
-                    upper_bound_text,
-                    integral_bound_mode,
-                    integral_steps
-                )
+                if challenge_mode:
+                    draw_challenge_ui(
+                        frame,
+                        challenge_problem,
+                        (
+                            challenge_timer
+                            .get_remaining()
+                        ),
+                        game_state.challenge_score,
+                        math_engine.get_display_expression(),
+                        answer,
+                        challenge_result,
+                        challenge_wrong_answer
+                    )
+                else:
+                    draw_calculator_ui(
+                        frame,
+                        math_engine.get_display_expression(),
+                        answer,
+                        integral_mode,
+                        lower_bound_text,
+                        upper_bound_text,
+                        integral_bound_mode,
+                        integral_steps
+                    )
 
             if SHOW_FPS:
                 draw_fps(
@@ -1468,7 +1781,26 @@ def main():
                 break
 
             if key == 27:
-                if training_mode:
+                if challenge_mode:
+                    challenge_mode = False
+                    challenge_result = None
+                    challenge_result_time = None
+                    challenge_problem = None
+                    challenge_timer.reset()
+                    game_state.reset_challenge()
+
+                    clear_visuals(
+                        stroke_manager,
+                        glow_renderer,
+                        particle_system,
+                        spell_ring
+                    )
+
+                    print(
+                        "Exited challenge mode."
+                    )
+
+                elif training_mode:
                     training_mode = False
                     selected_training_symbol = None
 
@@ -1511,6 +1843,14 @@ def main():
                 training_mode = not training_mode
                 selected_training_symbol = None
 
+                if challenge_mode:
+                    challenge_mode = False
+                    challenge_result = None
+                    challenge_result_time = None
+                    challenge_problem = None
+                    challenge_timer.reset()
+                    game_state.reset_challenge()
+
                 integral_mode = False
                 integral_bound_mode = None
 
@@ -1540,6 +1880,89 @@ def main():
                 else:
                     print(
                         "Exited training mode."
+                    )
+
+            if key == ord("g"):
+                if not challenge_mode:
+                    challenge_mode = True
+                    integral_mode = True
+                    training_mode = False
+                    selected_training_symbol = None
+
+                    challenge_problem = get_random_problem()
+                    game_state.start_challenge(
+                        challenge_problem
+                    )
+
+                    challenge_timer.reset()
+                    challenge_timer.set_duration(60)
+                    challenge_timer.start()
+
+                    challenge_result = None
+                    challenge_result_time = None
+
+                    math_engine.clear()
+                    game_state.clear_tokens()
+
+                    lower_bound_tokens.clear()
+                    upper_bound_tokens.clear()
+                    integral_bound_mode = None
+
+                    answer = None
+                    integral_steps = None
+
+                    clear_visuals(
+                        stroke_manager,
+                        glow_renderer,
+                        particle_system,
+                        spell_ring
+                    )
+
+                    print(
+                        "Started Integral Challenge Mode!"
+                    )
+                    print(
+                        f"Problem: {challenge_problem['display']}"
+                    )
+                    print(
+                        f"Solve it within {challenge_timer.duration} seconds!"
+                    )
+
+                else:
+                    challenge_problem = get_random_problem(
+                        exclude=challenge_problem
+                    )
+                    game_state.start_challenge(
+                        challenge_problem
+                    )
+
+                    challenge_timer.reset()
+                    challenge_timer.set_duration(60)
+                    challenge_timer.start()
+
+                    challenge_result = None
+                    challenge_result_time = None
+
+                    math_engine.clear()
+                    game_state.clear_tokens()
+
+                    lower_bound_tokens.clear()
+                    upper_bound_tokens.clear()
+                    integral_bound_mode = None
+
+                    answer = None
+                    integral_steps = None
+
+                    clear_visuals(
+                        stroke_manager,
+                        glow_renderer,
+                        particle_system,
+                        spell_ring
+                    )
+
+                    print(
+                        "New challenge: "
+                        f"{challenge_problem['display']}"
                     )
 
             if training_mode:
@@ -1633,6 +2056,14 @@ def main():
             if key == ord("i"):
                 integral_mode = not integral_mode
 
+                if not integral_mode and challenge_mode:
+                    challenge_mode = False
+                    challenge_result = None
+                    challenge_result_time = None
+                    challenge_problem = None
+                    challenge_timer.reset()
+                    game_state.reset_challenge()
+
                 integral_bound_mode = None
 
                 lower_bound_tokens.clear()
@@ -1668,8 +2099,13 @@ def main():
                     )
 
                     print(
-                        "Press ENTER to solve "
-                        "the definite integral."
+                        "Press ENTER (or hold FIST) "
+                        "to solve."
+                    )
+
+                    print(
+                        "Press G to start an "
+                        "Integral Challenge!"
                     )
 
                 else:
@@ -1767,6 +2203,7 @@ def main():
 
                     answer = None
                     integral_steps = None
+                    challenge_wrong_answer = False
 
                     spell_ring.set_visible(
                         False
@@ -1792,6 +2229,23 @@ def main():
                         print(
                             "Draw a function first."
                         )
+
+                    elif challenge_mode and not lower_bound_text and not upper_bound_text:
+                        answer = (
+                            math_engine
+                            .get_answer_text()
+                        )
+
+                        if answer is None:
+                            print(
+                                "Could not evaluate expression: "
+                                f"{math_engine.get_display_expression()}"
+                            )
+                        else:
+                            print(
+                                "Challenge answer submitted: "
+                                f"{math_engine.get_display_expression()} = {answer}"
+                            )
 
                     elif not lower_bound_text:
                         answer = None
