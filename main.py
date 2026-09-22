@@ -30,6 +30,24 @@ from ui.hud import HUD
 from ui.spell_ring import SpellRing
 
 
+TRAINABLE_SYMBOLS = {
+    ord("0"): "0",
+    ord("1"): "1",
+    ord("2"): "2",
+    ord("3"): "3",
+    ord("4"): "4",
+    ord("5"): "5",
+    ord("6"): "6",
+    ord("7"): "7",
+    ord("8"): "8",
+    ord("9"): "9",
+    ord("+"): "+",
+    ord("-"): "-",
+    ord("*"): "×",
+    ord("/"): "÷",
+}
+
+
 def get_fingertip_position(hand, frame_width, frame_height):
     if hand is None:
         return None
@@ -122,6 +140,149 @@ def draw_answer(frame, answer):
     )
 
 
+def draw_training_ui(
+    frame,
+    selected_symbol,
+    template_count
+):
+    height, width = frame.shape[:2]
+
+    overlay = frame.copy()
+
+    cv2.rectangle(
+        overlay,
+        (15, 15),
+        (width - 15, 145),
+        (20, 20, 35),
+        -1
+    )
+
+    frame[:] = cv2.addWeighted(
+        overlay,
+        0.85,
+        frame,
+        0.15,
+        0
+    )
+
+    cv2.putText(
+        frame,
+        "TRAINING MODE",
+        (35, 50),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.9,
+        (180, 240, 255),
+        2,
+        cv2.LINE_AA
+    )
+
+    if selected_symbol is None:
+        selected_text = "NONE"
+    else:
+        selected_text = selected_symbol
+
+    cv2.putText(
+        frame,
+        f"TRAINING: {selected_text}",
+        (35, 85),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.75,
+        (255, 220, 120),
+        2,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        f"SAVED EXAMPLES: {template_count}",
+        (35, 115),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.55,
+        (200, 200, 200),
+        1,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        "0-9 = NUMBER   +/- = OPERATOR   * = MULTIPLY   / = DIVIDE",
+        (35, height - 75),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.48,
+        (200, 200, 200),
+        1,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        "DRAW = SAVE EXAMPLE   T = CALCULATOR   ESC = EXIT",
+        (35, height - 45),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.48,
+        (200, 200, 200),
+        1,
+        cv2.LINE_AA
+    )
+
+
+def draw_calculator_ui(
+    frame,
+    expression,
+    answer
+):
+    height, width = frame.shape[:2]
+
+    cv2.putText(
+        frame,
+        "CALCULATOR",
+        (30, 45),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.8,
+        (180, 240, 255),
+        2,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        f"EXPRESSION: {expression}",
+        (30, 85),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.65,
+        (230, 230, 230),
+        2,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        "T = TRAINING MODE",
+        (30, height - 75),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        (200, 200, 200),
+        1,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        "ENTER = CALCULATE    C = CLEAR    Q = QUIT",
+        (30, height - 45),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        (255, 220, 120),
+        1,
+        cv2.LINE_AA
+    )
+
+    draw_answer(
+        frame,
+        answer
+    )
+
+
 def main():
     camera = Camera(
         camera_index=CAMERA_INDEX,
@@ -168,6 +329,9 @@ def main():
 
         answer = None
 
+        training_mode = False
+        selected_training_symbol = None
+
         previous_timestamp = 0
         previous_time = time.monotonic()
         fps = 0.0
@@ -175,29 +339,41 @@ def main():
         while True:
             current_time = time.monotonic()
 
-            delta_time = current_time - previous_time
+            delta_time = (
+                current_time
+                - previous_time
+            )
+
             previous_time = current_time
 
             if delta_time > 0:
                 current_fps = 1.0 / delta_time
+
                 fps = (
                     current_fps
                     if fps == 0.0
-                    else fps * 0.9 + current_fps * 0.1
+                    else fps * 0.9
+                    + current_fps * 0.1
                 )
 
             frame = camera.read()
 
             if frame is None:
-                print("Could not read frame from webcam.")
+                print(
+                    "Could not read frame from webcam."
+                )
                 break
 
             frame_height, frame_width = frame.shape[:2]
 
-            timestamp_ms = int(current_time * 1000)
+            timestamp_ms = int(
+                current_time * 1000
+            )
 
             if timestamp_ms <= previous_timestamp:
-                timestamp_ms = previous_timestamp + 1
+                timestamp_ms = (
+                    previous_timestamp + 1
+                )
 
             previous_timestamp = timestamp_ms
 
@@ -206,13 +382,17 @@ def main():
                 timestamp_ms
             )
 
-            fingertip_position = get_fingertip_position(
-                hand,
-                frame_width,
-                frame_height
+            fingertip_position = (
+                get_fingertip_position(
+                    hand,
+                    frame_width,
+                    frame_height
+                )
             )
 
-            action = gesture_controller.update(hand)
+            action = gesture_controller.update(
+                hand
+            )
 
             if action == "DRAW":
                 if fingertip_position is not None:
@@ -221,10 +401,14 @@ def main():
                             fingertip_position
                         )
                     else:
-                        points = stroke_manager.get_points()
+                        points = (
+                            stroke_manager.get_points()
+                        )
 
                         if points:
-                            previous_point = points[-1]
+                            previous_point = (
+                                points[-1]
+                            )
 
                             glow_renderer.draw_spell_line(
                                 previous_point,
@@ -240,54 +424,120 @@ def main():
                         fingertip_position[1]
                     )
 
-                    spell_ring.set_visible(True)
+                    spell_ring.set_visible(
+                        True
+                    )
 
             elif action == "COMMIT":
                 if not stroke_manager.is_empty():
-                    stroke = stroke_manager.finish()
-
-                    token = recognizer.recognize(
-                        stroke
+                    stroke = (
+                        stroke_manager.finish()
                     )
 
-                    if token is not None:
-                        math_engine.add_token(token)
-                        game_state.add_token(token)
+                    if training_mode:
+                        if selected_training_symbol is not None:
+                            saved = (
+                                recognizer.add_template(
+                                    selected_training_symbol,
+                                    stroke
+                                )
+                            )
 
-                        answer = None
+                            if saved:
+                                count = (
+                                    recognizer
+                                    .get_user_template_count(
+                                        selected_training_symbol
+                                    )
+                                )
 
-                        print(
-                            f"Stroke committed: "
-                            f"{len(stroke)} points -> "
-                            f"token '{token}'"
+                                print(
+                                    "Training saved: "
+                                    f"'{selected_training_symbol}' "
+                                    f"example #{count}"
+                                )
+                            else:
+                                print(
+                                    "Training stroke "
+                                    "was too short."
+                                )
+
+                        else:
+                            print(
+                                "Select a symbol "
+                                "before drawing."
+                            )
+
+                    else:
+                        token = (
+                            recognizer.recognize(
+                                stroke
+                            )
                         )
+
+                        if token is not None:
+                            math_engine.add_token(
+                                token
+                            )
+
+                            game_state.add_token(
+                                token
+                            )
+
+                            answer = None
+
+                            print(
+                                "Stroke committed: "
+                                f"{len(stroke)} points "
+                                f"-> token '{token}'"
+                            )
+                        else:
+                            print(
+                                "Stroke could not "
+                                "be recognized."
+                            )
 
                     glow_renderer.clear()
 
-                spell_ring.set_visible(False)
+                spell_ring.set_visible(
+                    False
+                )
 
             elif action == "CLEAR":
                 stroke_manager.clear()
                 glow_renderer.clear()
                 particle_system.clear()
-                math_engine.clear()
-                game_state.clear_tokens()
 
-                answer = None
+                if not training_mode:
+                    math_engine.clear()
+                    game_state.clear_tokens()
+                    answer = None
 
-                print("Current expression cleared.")
+                spell_ring.set_visible(
+                    False
+                )
 
-                spell_ring.set_visible(False)
+                print(
+                    "Current stroke cleared."
+                )
 
             elif action == "IDLE":
-                spell_ring.set_visible(False)
+                spell_ring.set_visible(
+                    False
+                )
 
             particle_system.update()
-            spell_ring.update(delta_time)
+            spell_ring.update(
+                delta_time
+            )
 
-            frame = glow_renderer.render(frame)
+            frame = glow_renderer.render(
+                frame
+            )
 
-            particle_system.draw(frame)
+            particle_system.draw(
+                frame
+            )
 
             spell_ring.draw(
                 frame,
@@ -300,45 +550,102 @@ def main():
                 action == "DRAW"
             )
 
-            hud.draw(
-                frame,
-                target_expression="",
-                player_expression=math_engine.get_display_expression(),
-                time_remaining=0.0,
-                score=game_state.score,
-                status="CALCULATOR"
-            )
+            if training_mode:
+                draw_training_ui(
+                    frame,
+                    selected_training_symbol,
+                    (
+                        recognizer
+                        .get_user_template_count(
+                            selected_training_symbol
+                        )
+                        if selected_training_symbol
+                        else 0
+                    )
+                )
 
-            hud.draw_instructions(frame)
-
-            draw_answer(
-                frame,
-                answer
-            )
-
-            cv2.putText(
-                frame,
-                "ENTER = CALCULATE",
-                (30, frame_height - 105),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.55,
-                (255, 220, 120),
-                1,
-                cv2.LINE_AA
-            )
+            else:
+                draw_calculator_ui(
+                    frame,
+                    math_engine.get_display_expression(),
+                    answer
+                )
 
             if SHOW_FPS:
-                draw_fps(frame, fps)
+                draw_fps(
+                    frame,
+                    fps
+                )
 
             cv2.imshow(
                 WINDOW_NAME,
                 frame
             )
 
-            key = cv2.waitKey(1) & 0xFF
+            key = (
+                cv2.waitKey(1)
+                & 0xFF
+            )
 
             if key == ord("q"):
                 break
+
+            if key == 27:
+                if training_mode:
+                    training_mode = False
+                    selected_training_symbol = None
+
+                    stroke_manager.clear()
+                    glow_renderer.clear()
+                    particle_system.clear()
+
+                    print(
+                        "Exited training mode."
+                    )
+                else:
+                    break
+
+            if key == ord("t"):
+                training_mode = not training_mode
+                selected_training_symbol = None
+
+                stroke_manager.clear()
+                glow_renderer.clear()
+                particle_system.clear()
+
+                if training_mode:
+                    print(
+                        "Entered training mode."
+                    )
+                    print(
+                        "Press a symbol key "
+                        "before drawing it."
+                    )
+                else:
+                    print(
+                        "Exited training mode."
+                    )
+
+            if training_mode:
+                if key in TRAINABLE_SYMBOLS:
+                    selected_training_symbol = (
+                        TRAINABLE_SYMBOLS[key]
+                    )
+
+                    count = (
+                        recognizer
+                        .get_user_template_count(
+                            selected_training_symbol
+                        )
+                    )
+
+                    print(
+                        "Selected training symbol: "
+                        f"'{selected_training_symbol}' "
+                        f"({count} saved examples)"
+                    )
+
+                continue
 
             if key == ord("c"):
                 stroke_manager.clear()
@@ -349,16 +656,24 @@ def main():
 
                 answer = None
 
-                spell_ring.set_visible(False)
+                spell_ring.set_visible(
+                    False
+                )
 
-                print("Current expression cleared.")
+                print(
+                    "Current expression cleared."
+                )
 
             if key == 13:
-                answer = math_engine.get_answer_text()
+                answer = (
+                    math_engine
+                    .get_answer_text()
+                )
 
                 if answer is None:
                     print(
-                        "Could not calculate expression:"
+                        "Could not calculate "
+                        "expression:"
                         f" {math_engine.get_display_expression()}"
                     )
                 else:
@@ -368,7 +683,9 @@ def main():
                     )
 
     except RuntimeError as error:
-        print(f"Runtime error: {error}")
+        print(
+            f"Runtime error: {error}"
+        )
 
     finally:
         if hand_tracker is not None:
