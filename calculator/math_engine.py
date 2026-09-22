@@ -2,6 +2,7 @@ import sympy as sp
 from sympy.parsing.sympy_parser import (
     implicit_multiplication_application,
     parse_expr,
+    standard_transformations,
 )
 
 
@@ -49,12 +50,17 @@ class MathEngine:
         try:
             x = sp.Symbol("x")
 
+            transformations = (
+                standard_transformations
+                + (
+                    implicit_multiplication_application,
+                )
+            )
+
             return parse_expr(
                 expression,
                 local_dict={"x": x},
-                transformations=(
-                    implicit_multiplication_application
-                ),
+                transformations=transformations,
                 evaluate=True
             )
 
@@ -233,12 +239,17 @@ class MathEngine:
         try:
             x = sp.Symbol("x")
 
+            transformations = (
+                standard_transformations
+                + (
+                    implicit_multiplication_application,
+                )
+            )
+
             target = parse_expr(
                 target_expression,
                 local_dict={"x": x},
-                transformations=(
-                    implicit_multiplication_application
-                ),
+                transformations=transformations,
                 evaluate=True
             )
 
