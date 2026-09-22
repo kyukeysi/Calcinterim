@@ -22,9 +22,9 @@ from drawing.glow import GlowRenderer
 from drawing.particles import ParticleSystem
 from drawing.stroke_manager import StrokeManager
 from game.game_state import GameState
-from game.timer import GameTimer
 from gestures import GestureController
 from hand_tracker import HandTracker
+from math.math_engine import MathEngine
 from recognition.recognizer import StrokeRecognizer
 from ui.hud import HUD
 from ui.spell_ring import SpellRing
@@ -93,6 +93,35 @@ def draw_fps(frame, fps):
     )
 
 
+def draw_answer(frame, answer):
+    if answer is None:
+        return
+
+    height, width = frame.shape[:2]
+
+    cv2.putText(
+        frame,
+        "ANSWER:",
+        (width - 350, height - 100),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.8,
+        (255, 220, 120),
+        2,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        str(answer),
+        (width - 350, height - 55),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1.2,
+        (180, 240, 255),
+        3,
+        cv2.LINE_AA
+    )
+
+
 def main():
     camera = Camera(
         camera_index=CAMERA_INDEX,
@@ -117,6 +146,7 @@ def main():
         )
 
         stroke_manager = StrokeManager()
+
         particle_system = ParticleSystem(
             particle_count=PARTICLE_COUNT
         )
@@ -130,15 +160,13 @@ def main():
         )
 
         recognizer = StrokeRecognizer()
-
+        math_engine = MathEngine()
         game_state = GameState()
-        game_timer = GameTimer(duration=60)
 
         hud = HUD()
         spell_ring = SpellRing()
 
-        game_state.start_round("12x²")
-        game_timer.start()
+        answer = None
 
         previous_timestamp = 0
         previous_time = time.monotonic()
@@ -223,7 +251,10 @@ def main():
                     )
 
                     if token is not None:
+                        math_engine.add_token(token)
                         game_state.add_token(token)
+
+                        answer = None
 
                         print(
                             f"Stroke committed: "
@@ -239,9 +270,12 @@ def main():
                 stroke_manager.clear()
                 glow_renderer.clear()
                 particle_system.clear()
+                math_engine.clear()
                 game_state.clear_tokens()
 
-                print("Current spell cleared.")
+                answer = None
+
+                print("Current expression cleared.")
 
                 spell_ring.set_visible(False)
 
@@ -268,14 +302,30 @@ def main():
 
             hud.draw(
                 frame,
-                target_expression=game_state.target_expression,
-                player_expression=game_state.get_player_expression(),
-                time_remaining=game_timer.get_remaining(),
+                target_expression="",
+                player_expression=math_engine.get_display_expression(),
+                time_remaining=0.0,
                 score=game_state.score,
-                status=game_state.status.value
+                status="CALCULATOR"
             )
 
             hud.draw_instructions(frame)
+
+            draw_answer(
+                frame,
+                answer
+            )
+
+            cv2.putText(
+                frame,
+                "ENTER = CALCULATE",
+                (30, frame_height - 105),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                (255, 220, 120),
+                1,
+                cv2.LINE_AA
+            )
 
             if SHOW_FPS:
                 draw_fps(frame, fps)
@@ -294,14 +344,28 @@ def main():
                 stroke_manager.clear()
                 glow_renderer.clear()
                 particle_system.clear()
+                math_engine.clear()
                 game_state.clear_tokens()
+
+                answer = None
+
                 spell_ring.set_visible(False)
 
-            if game_timer.is_expired():
-                game_timer.stop()
+                print("Current expression cleared.")
 
-                if game_state.is_playing():
-                    game_state.set_failed()
+            if key == 13:
+                answer = math_engine.get_answer_text()
+
+                if answer is None:
+                    print(
+                        "Could not calculate expression:"
+                        f" {math_engine.get_display_expression()}"
+                    )
+                else:
+                    print(
+                        f"{math_engine.get_display_expression()}"
+                        f" = {answer}"
+                    )
 
     except RuntimeError as error:
         print(f"Runtime error: {error}")
