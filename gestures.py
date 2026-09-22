@@ -18,7 +18,10 @@ def thumb_is_out(hand):
     index_mcp = hand[5]
 
     hand_size = distance(wrist, hand[9])
-    thumb_distance = distance(thumb_tip, index_mcp)
+    thumb_distance = distance(
+        thumb_tip,
+        index_mcp
+    )
 
     return thumb_distance > hand_size * 0.45
 
@@ -28,7 +31,10 @@ def thumb_is_raised(hand):
 
 
 def is_drawing_gesture(hand):
-    return index_is_up(hand) and thumb_is_out(hand)
+    return (
+        index_is_up(hand)
+        and thumb_is_out(hand)
+    )
 
 
 def is_open_palm(hand):
@@ -48,6 +54,53 @@ def is_open_palm(hand):
     return fingers_extended >= 4
 
 
+def is_closed_fist(hand):
+    """
+    Detects a closed fist.
+
+    The four fingers should be folded toward
+    the palm, while the thumb is also close
+    to the palm.
+    """
+
+    finger_pairs = [
+        (8, 6),
+        (12, 10),
+        (16, 14),
+        (20, 18)
+    ]
+
+    folded_fingers = 0
+
+    for tip, pip in finger_pairs:
+        if hand[tip].y > hand[pip].y:
+            folded_fingers += 1
+
+    wrist = hand[0]
+
+    thumb_tip = hand[4]
+    index_mcp = hand[5]
+
+    hand_size = distance(
+        wrist,
+        hand[9]
+    )
+
+    thumb_distance = distance(
+        thumb_tip,
+        index_mcp
+    )
+
+    thumb_folded = (
+        thumb_distance < hand_size * 0.45
+    )
+
+    return (
+        folded_fingers >= 4
+        and thumb_folded
+    )
+
+
 class GestureController:
     def __init__(
         self,
@@ -58,8 +111,13 @@ class GestureController:
         self.release_frames = 0
         self.open_palm_frames = 0
 
-        self.commit_release_frames = commit_release_frames
-        self.open_palm_clear_frames = open_palm_clear_frames
+        self.commit_release_frames = (
+            commit_release_frames
+        )
+
+        self.open_palm_clear_frames = (
+            open_palm_clear_frames
+        )
 
     def update(self, hand):
         if hand is None:
@@ -69,9 +127,13 @@ class GestureController:
             if self.was_drawing:
                 self.release_frames += 1
 
-                if self.release_frames >= self.commit_release_frames:
+                if (
+                    self.release_frames
+                    >= self.commit_release_frames
+                ):
                     self.was_drawing = False
                     self.release_frames = 0
+
                     return "COMMIT"
 
             return "NONE"
@@ -79,26 +141,41 @@ class GestureController:
         if is_open_palm(hand):
             self.open_palm_frames += 1
 
-            if self.open_palm_frames >= self.open_palm_clear_frames:
+            if (
+                self.open_palm_frames
+                >= self.open_palm_clear_frames
+            ):
                 self.was_drawing = False
                 self.release_frames = 0
                 self.open_palm_frames = 0
+
                 return "CLEAR"
 
         else:
             self.open_palm_frames = 0
 
+        if is_closed_fist(hand):
+            self.was_drawing = False
+            self.release_frames = 0
+
+            return "ENTER"
+
         if is_drawing_gesture(hand):
             self.was_drawing = True
             self.release_frames = 0
+
             return "DRAW"
 
         if self.was_drawing:
             self.release_frames += 1
 
-            if self.release_frames >= self.commit_release_frames:
+            if (
+                self.release_frames
+                >= self.commit_release_frames
+            ):
                 self.was_drawing = False
                 self.release_frames = 0
+
                 return "COMMIT"
 
             return "DRAW"
