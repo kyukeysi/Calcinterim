@@ -102,7 +102,7 @@ def draw_fps(frame, fps):
     cv2.putText(
         frame,
         f"FPS: {fps:.1f}",
-        (20, 175),
+        (20, 205),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.5,
         (180, 180, 180),
@@ -119,21 +119,23 @@ def draw_answer(frame, answer):
 
     cv2.putText(
         frame,
-        "ANSWER:",
-        (width - 350, height - 100),
+        "ANSWER",
+        (45, height - 165),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.8,
+        0.65,
         (255, 220, 120),
         2,
         cv2.LINE_AA
     )
 
+    answer_text = str(answer)
+
     cv2.putText(
         frame,
-        str(answer),
-        (width - 350, height - 55),
+        answer_text,
+        (45, height - 110),
         cv2.FONT_HERSHEY_SIMPLEX,
-        1.2,
+        1.6,
         (180, 240, 255),
         3,
         cv2.LINE_AA
@@ -244,12 +246,30 @@ def draw_calculator_ui(
 ):
     height, width = frame.shape[:2]
 
+    overlay = frame.copy()
+
+    cv2.rectangle(
+        overlay,
+        (15, 15),
+        (width - 15, 245),
+        (20, 20, 35),
+        -1
+    )
+
+    frame[:] = cv2.addWeighted(
+        overlay,
+        0.85,
+        frame,
+        0.15,
+        0
+    )
+
     cv2.putText(
         frame,
         "CALCULATOR",
-        (30, 45),
+        (35, 50),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.8,
+        0.9,
         (180, 240, 255),
         2,
         cv2.LINE_AA
@@ -257,19 +277,77 @@ def draw_calculator_ui(
 
     cv2.putText(
         frame,
-        f"EXPRESSION: {expression}",
-        (30, 85),
+        "EXPRESSION",
+        (35, 82),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.65,
-        (230, 230, 230),
-        2,
+        0.52,
+        (180, 180, 180),
+        1,
+        cv2.LINE_AA
+    )
+
+    expression_text = (
+        expression
+        if expression
+        else "DRAW A NUMBER OR OPERATOR"
+    )
+
+    expression_size = 1.15
+
+    if len(expression_text) > 22:
+        expression_size = 0.85
+    elif len(expression_text) > 15:
+        expression_size = 1.0
+
+    cv2.putText(
+        frame,
+        expression_text,
+        (35, 130),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        expression_size,
+        (255, 255, 255),
+        3,
+        cv2.LINE_AA
+    )
+
+    cv2.putText(
+        frame,
+        "ANSWER",
+        (35, 165),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.52,
+        (255, 220, 120),
+        1,
+        cv2.LINE_AA
+    )
+
+    if answer is None:
+        answer_text = "—"
+    else:
+        answer_text = str(answer)
+
+    answer_size = 1.35
+
+    if len(answer_text) > 18:
+        answer_size = 0.9
+    elif len(answer_text) > 12:
+        answer_size = 1.1
+
+    cv2.putText(
+        frame,
+        answer_text,
+        (35, 215),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        answer_size,
+        (180, 240, 255),
+        3,
         cv2.LINE_AA
     )
 
     cv2.putText(
         frame,
         "T = TRAINING MODE",
-        (30, height - 75),
+        (35, height - 75),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.5,
         (200, 200, 200),
@@ -280,17 +358,12 @@ def draw_calculator_ui(
     cv2.putText(
         frame,
         "ENTER = CALCULATE    C = CLEAR    Q = QUIT",
-        (30, height - 45),
+        (35, height - 45),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.5,
         (255, 220, 120),
         1,
         cv2.LINE_AA
-    )
-
-    draw_answer(
-        frame,
-        answer
     )
 
 
