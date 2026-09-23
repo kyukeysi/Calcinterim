@@ -3,6 +3,11 @@ import time
 
 import cv2
 import numpy as np
+try:
+    import pygame
+    _PYGAME_AVAILABLE = True
+except ImportError:
+    _PYGAME_AVAILABLE = False
 from PIL import Image, ImageDraw, ImageFont
 
 from camera import Camera
@@ -27,7 +32,7 @@ from drawing.stroke_manager import StrokeManager
 from game.challenge_pool import get_random_problem
 from game.game_state import GameState
 from game.timer import GameTimer
-from gestures import GestureController
+from gestures import GestureController, CircleGestureDetector
 from hand_tracker import HandTracker
 from calculator.math_engine import MathEngine
 from recognition.recognizer import StrokeRecognizer
@@ -52,6 +57,8 @@ TRAINABLE_SYMBOLS = {
     ord("/"): "÷",
     ord("x"): "x",
     ord("^"): "^",
+    ord("("): "(",
+    ord(")"): ")",
 }
 
 
@@ -659,6 +666,49 @@ def draw_integral_steps(
         )
 
 
+def draw_difficulty_select_ui(frame):
+    """
+    Renders an interactive difficulty selection screen for Challenge Mode.
+    """
+    height, width = frame.shape[:2]
+
+    # Semi-transparent dark card
+    overlay = frame.copy()
+    box_w = 700
+    box_h = 360
+    x1 = (width - box_w) // 2
+    y1 = (height - box_h) // 2
+    x2 = x1 + box_w
+    y2 = y1 + box_h
+
+    cv2.rectangle(overlay, (x1, y1), (x2, y2), (18, 20, 26), -1)
+    cv2.addWeighted(overlay, 0.88, frame, 0.12, 0, frame)
+
+    # Glowing Cyan / Gold border
+    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 215, 255), 2, cv2.LINE_AA)
+
+    def center_text(text, y_pos, scale=0.8, color=(255, 255, 255), thickness=2):
+        size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness)[0]
+        x = (width - size[0]) // 2
+        cv2.putText(frame, text, (x, y_pos), cv2.FONT_HERSHEY_SIMPLEX, scale, (0, 0, 0), thickness + 2, cv2.LINE_AA)
+        cv2.putText(frame, text, (x, y_pos), cv2.FONT_HERSHEY_SIMPLEX, scale, color, thickness, cv2.LINE_AA)
+
+    center_text("CHALLENGE MODE", y1 + 50, scale=1.1, color=(0, 215, 255), thickness=3)
+    center_text("SELECT DIFFICULTY", y1 + 88, scale=0.7, color=(200, 240, 255), thickness=2)
+
+    # Option 1: EASY
+    center_text("[ 1 ]  EASY  -  Basic Algebra & Arithmetic", y1 + 145, scale=0.82, color=(100, 255, 130), thickness=2)
+    center_text("Addition, subtraction, multiplication, exponents & parentheses", y1 + 172, scale=0.52, color=(180, 230, 190), thickness=1)
+
+    # Option 2: HARD
+    center_text("[ 2 ]  HARD  -  Calculus & Definite Integrals", y1 + 225, scale=0.82, color=(100, 140, 255), thickness=2)
+    center_text("Integrals with lower & upper bounds", y1 + 252, scale=0.52, color=(190, 190, 240), thickness=1)
+
+    # Instructions
+    center_text("Press [1] or [2] on keyboard  (or draw 1 or 2)", y1 + 305, scale=0.62, color=(255, 255, 255), thickness=2)
+    center_text("Press [G] for Easy  |  Press [ESC] to Cancel", y1 + 333, scale=0.52, color=(160, 160, 160), thickness=1)
+
+
 def draw_challenge_ui(
     frame,
     problem,
@@ -667,12 +717,13 @@ def draw_challenge_ui(
     numbers_entered,
     answer=None,
     result_text=None,
-    wrong_answer=False
+    wrong_answer=False,
+    difficulty="easy"
 ):
     """
     Draws the minimal integral challenge UI overlay directly onto the frame.
-    Only displays:
-      1. Given (the integral problem)
+    Displays:
+      1. Given (the challenge problem + difficulty badge)
       2. Score
       3. Timer
       4. Numbers entered
@@ -702,14 +753,16 @@ def draw_challenge_ui(
             cv2.LINE_AA
         )
 
-    # 1. GIVEN
+    # 1. GIVEN + DIFFICULTY BADGE
     problem_display = problem["display"] if problem else "-"
-    given_text = f"GIVEN: {problem_display}"
+    diff_tag = " [EASY]" if difficulty == "easy" else " [HARD]"
+    diff_color = (120, 255, 120) if difficulty == "easy" else (100, 150, 255)
+    given_text = f"GIVEN{diff_tag}: {problem_display}"
     put_clean_text(
         given_text,
         (30, 45),
         scale=0.75,
-        color=(255, 255, 255),
+        color=diff_color,
         thickness=2
     )
 
@@ -1185,6 +1238,8 @@ def main():
         upper_bound_tokens = []
 
         challenge_mode = False
+        challenge_selecting = False
+        challenge_difficulty = "easy"
         challenge_timer = GameTimer(
             duration=60
         )
@@ -1192,6 +1247,99 @@ def main():
         challenge_result = None
         challenge_result_time = None
         challenge_wrong_answer = False
+
+        # --- Audio setup (Avengers theme for Challenge Mode) ---
+        _sound_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "sound"
+        )
+        _avengers_path = os.path.join(
+            _sound_dir, "Avengers.mp3"
+        )
+        _music_loaded = False
+        if _PYGAME_AVAILABLE:
+            try:
+                pygame.mixer.init()
+                if os.path.exists(_avengers_path):
+                    pygame.mixer.music.load(_avengers_path)
+                    _music_loaded = True
+                    print("Avengers theme loaded.")
+                else:
+                    print(
+                        "Warning: sound/Avengers.mp3 not found."
+                    )
+            except Exception as _e:
+                print(f"Audio init failed: {_e}")
+
+        def play_challenge_music():
+            if _PYGAME_AVAILABLE and _music_loaded:
+                pygame.mixer.music.play(-1)
+
+        def stop_challenge_music():
+            if _PYGAME_AVAILABLE and _music_loaded:
+                if pygame.mixer.music.get_busy():
+                    pygame.mixer.music.stop()
+
+        def start_challenge_session(diff="easy"):
+            nonlocal challenge_mode, challenge_selecting, challenge_difficulty
+            nonlocal challenge_problem, challenge_result, challenge_result_time, challenge_wrong_answer
+            nonlocal integral_mode, training_mode, selected_training_symbol
+            nonlocal answer, integral_steps, integral_bound_mode
+
+            challenge_selecting = False
+            challenge_mode = True
+            challenge_difficulty = diff
+
+            integral_mode = (challenge_difficulty == "hard")
+            training_mode = False
+            selected_training_symbol = None
+
+            challenge_problem = get_random_problem(difficulty=challenge_difficulty)
+            game_state.start_challenge(challenge_problem)
+
+            challenge_timer.reset()
+            challenge_timer.set_duration(60)
+            challenge_timer.start()
+
+            challenge_result = None
+            challenge_result_time = None
+            challenge_wrong_answer = False
+
+            math_engine.clear()
+            game_state.clear_tokens()
+
+            lower_bound_tokens.clear()
+            upper_bound_tokens.clear()
+            integral_bound_mode = None
+
+            answer = None
+            integral_steps = None
+
+            clear_visuals(
+                stroke_manager,
+                glow_renderer,
+                particle_system,
+                spell_ring
+            )
+
+            play_challenge_music()
+
+            print(
+                f"Started {challenge_difficulty.upper()} Challenge Mode!"
+            )
+            print(
+                f"Problem: {challenge_problem['display']}"
+            )
+            print(
+                f"Solve it within {challenge_timer.duration} seconds!"
+            )
+
+        # --- Circle gesture detector (> 4 circles to enter challenge) ---
+        circle_detector = CircleGestureDetector(
+            target_revolutions=4.0,
+            min_radius=25,
+            cooldown=2.0
+        )
 
         previous_timestamp = 0
         previous_time = time.monotonic()
@@ -1257,6 +1405,38 @@ def main():
                 hand
             )
 
+            # --- Circle gesture detection for Challenge Mode ---
+            _hand_center_pos = None
+            if hand is not None:
+                _hx = int(
+                    hand[9].x * frame_width
+                )
+                _hy = int(
+                    hand[9].y * frame_height
+                )
+                _hand_center_pos = (_hx, _hy)
+
+            _circle_triggered, _circle_info = (
+                circle_detector.update(
+                    _hand_center_pos,
+                    current_time
+                )
+            )
+
+            if _circle_triggered and not challenge_mode and not challenge_selecting:
+                challenge_selecting = True
+                clear_visuals(
+                    stroke_manager,
+                    glow_renderer,
+                    particle_system,
+                    spell_ring
+                )
+                print(
+                    "Circle gesture detected! "
+                    "Challenge selection opened. "
+                    "Select difficulty: [1] Easy or [2] Hard"
+                )
+
             if action == "DRAW":
                 if fingertip_position is not None:
                     if stroke_manager.is_empty():
@@ -1298,7 +1478,23 @@ def main():
                         stroke_manager.finish()
                     )
 
-                    if training_mode:
+                    if challenge_selecting:
+                        token = (
+                            recognizer.recognize(
+                                stroke
+                            )
+                        )
+                        if token == "1":
+                            start_challenge_session("easy")
+                        elif token == "2":
+                            start_challenge_session("hard")
+                        else:
+                            print(
+                                f"Recognized '{token}'. "
+                                "Draw '1' for Easy or '2' for Hard."
+                            )
+
+                    elif training_mode:
                         if selected_training_symbol is not None:
                             saved = (
                                 recognizer.add_template(
@@ -1571,6 +1767,96 @@ def main():
                     False
                 )
 
+            # --- Draw circle progress badge when charging ---
+            if (
+                not challenge_mode
+                and _circle_info["progress"] > 0.05
+                and _circle_info["center"] is not None
+            ):
+                _prog = _circle_info["progress"]
+                _revs = _circle_info["revolutions"]
+                _cx, _cy = _circle_info["center"]
+                _rad = max(30, int(_circle_info["radius"] * 0.6))
+
+                # Glowing background circle
+                _badge_color = (
+                    int(50 + 205 * _prog),
+                    int(200 * (1 - _prog)),
+                    int(255 * _prog)
+                )
+                cv2.circle(
+                    frame,
+                    (_cx, _cy),
+                    _rad + 6,
+                    (20, 20, 20),
+                    -1,
+                    cv2.LINE_AA
+                )
+                # Progress arc
+                _arc_angle = int(360 * _prog)
+                cv2.ellipse(
+                    frame,
+                    (_cx, _cy),
+                    (_rad, _rad),
+                    -90,
+                    0,
+                    _arc_angle,
+                    _badge_color,
+                    4,
+                    cv2.LINE_AA
+                )
+                # Outer ring
+                cv2.circle(
+                    frame,
+                    (_cx, _cy),
+                    _rad + 6,
+                    _badge_color,
+                    2,
+                    cv2.LINE_AA
+                )
+                # Revolution counter text
+                _rev_txt = f"{min(4, int(_revs + 0.1))}/4"
+                _ts = cv2.getTextSize(
+                    _rev_txt,
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.65,
+                    2
+                )[0]
+                cv2.putText(
+                    frame,
+                    _rev_txt,
+                    (
+                        _cx - _ts[0] // 2,
+                        _cy + _ts[1] // 2
+                    ),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.65,
+                    (255, 255, 255),
+                    2,
+                    cv2.LINE_AA
+                )
+                # Label below
+                _lbl = "PORTAL CHARGE"
+                _ls = cv2.getTextSize(
+                    _lbl,
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.4,
+                    1
+                )[0]
+                cv2.putText(
+                    frame,
+                    _lbl,
+                    (
+                        _cx - _ls[0] // 2,
+                        _cy + _rad + 22
+                    ),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.4,
+                    _badge_color,
+                    1,
+                    cv2.LINE_AA
+                )
+
             if challenge_mode:
                 if challenge_result is not None:
                     if challenge_result_time is not None:
@@ -1586,6 +1872,7 @@ def main():
                             ):
                                 challenge_problem = (
                                     get_random_problem(
+                                        difficulty=challenge_difficulty,
                                         exclude=(
                                             challenge_problem
                                         )
@@ -1633,6 +1920,7 @@ def main():
 
                             else:
                                 challenge_mode = False
+                                stop_challenge_music()
                                 challenge_result = None
                                 challenge_result_time = (
                                     None
@@ -1735,7 +2023,9 @@ def main():
                     upper_bound_tokens
                 )
 
-                if challenge_mode:
+                if challenge_selecting:
+                    draw_difficulty_select_ui(frame)
+                elif challenge_mode:
                     draw_challenge_ui(
                         frame,
                         challenge_problem,
@@ -1747,7 +2037,8 @@ def main():
                         math_engine.get_display_expression(),
                         answer,
                         challenge_result,
-                        challenge_wrong_answer
+                        challenge_wrong_answer,
+                        difficulty=challenge_difficulty
                     )
                 else:
                     draw_calculator_ui(
@@ -1781,8 +2072,15 @@ def main():
                 break
 
             if key == 27:
-                if challenge_mode:
+                if challenge_selecting:
+                    challenge_selecting = False
+                    print(
+                        "Exited challenge difficulty selection."
+                    )
+
+                elif challenge_mode:
                     challenge_mode = False
+                    stop_challenge_music()
                     challenge_result = None
                     challenge_result_time = None
                     challenge_problem = None
@@ -1839,12 +2137,29 @@ def main():
                 else:
                     break
 
+            if challenge_selecting:
+                if key == ord("1"):
+                    start_challenge_session("easy")
+                    continue
+                elif key == ord("2"):
+                    start_challenge_session("hard")
+                    continue
+                elif key == ord("g"):
+                    start_challenge_session("easy")
+                    continue
+                elif key == ord("c"):
+                    challenge_selecting = False
+                    print("Cancelled challenge selection.")
+                    continue
+
             if key == ord("t"):
+                challenge_selecting = False
                 training_mode = not training_mode
                 selected_training_symbol = None
 
                 if challenge_mode:
                     challenge_mode = False
+                    stop_challenge_music()
                     challenge_result = None
                     challenge_result_time = None
                     challenge_problem = None
@@ -1883,53 +2198,17 @@ def main():
                     )
 
             if key == ord("g"):
-                if not challenge_mode:
-                    challenge_mode = True
-                    integral_mode = True
-                    training_mode = False
-                    selected_training_symbol = None
-
-                    challenge_problem = get_random_problem()
-                    game_state.start_challenge(
-                        challenge_problem
-                    )
-
-                    challenge_timer.reset()
-                    challenge_timer.set_duration(60)
-                    challenge_timer.start()
-
-                    challenge_result = None
-                    challenge_result_time = None
-
-                    math_engine.clear()
-                    game_state.clear_tokens()
-
-                    lower_bound_tokens.clear()
-                    upper_bound_tokens.clear()
-                    integral_bound_mode = None
-
-                    answer = None
-                    integral_steps = None
-
-                    clear_visuals(
-                        stroke_manager,
-                        glow_renderer,
-                        particle_system,
-                        spell_ring
-                    )
-
+                if not challenge_mode and not challenge_selecting:
+                    challenge_selecting = True
                     print(
-                        "Started Integral Challenge Mode!"
+                        "Challenge difficulty selection opened. "
+                        "Press 1 for Easy (Algebra) or 2 for Hard (Calculus)."
                     )
-                    print(
-                        f"Problem: {challenge_problem['display']}"
-                    )
-                    print(
-                        f"Solve it within {challenge_timer.duration} seconds!"
-                    )
-
+                elif challenge_selecting:
+                    start_challenge_session("easy")
                 else:
                     challenge_problem = get_random_problem(
+                        difficulty=challenge_difficulty,
                         exclude=challenge_problem
                     )
                     game_state.start_challenge(
@@ -1961,7 +2240,7 @@ def main():
                     )
 
                     print(
-                        "New challenge: "
+                        f"New {challenge_difficulty.upper()} challenge: "
                         f"{challenge_problem['display']}"
                     )
 
@@ -2058,6 +2337,7 @@ def main():
 
                 if not integral_mode and challenge_mode:
                     challenge_mode = False
+                    stop_challenge_music()
                     challenge_result = None
                     challenge_result_time = None
                     challenge_problem = None
@@ -2404,6 +2684,12 @@ def main():
 
         camera.release()
         cv2.destroyAllWindows()
+
+        if _PYGAME_AVAILABLE:
+            try:
+                pygame.mixer.quit()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

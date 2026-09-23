@@ -1,4 +1,6 @@
+from collections import deque
 import math
+import time
 
 
 def distance(point_a, point_b):
@@ -195,3 +197,162 @@ class GestureController:
             return "DRAW"
 
         return "IDLE"
+
+
+class CircleGestureDetector:
+    """
+    Detects continuous circular hand movement in the air.
+    Triggers when the cumulative revolutions in a consistent direction
+    exceed target_revolutions (default: 4.0, i.e., > 4 full circles).
+    """
+
+    def __init__(
+        self,
+        target_revolutions=4.0,
+        min_radius=25,
+        max_inactivity=1.2,
+        history_len=120,
+        cooldown=2.0
+    ):
+        self.target_revolutions = target_revolutions
+        self.min_radius = min_radius
+        self.max_inactivity = max_inactivity
+        self.history_len = history_len
+        self.cooldown = cooldown
+
+        self.points = deque(maxlen=history_len)
+        self.total_angle = 0.0
+        self.last_angle = None
+        self.last_point_time = 0.0
+        self.last_trigger_time = 0.0
+        self.center = None
+        self.current_radius = 0.0
+
+    def reset(self):
+        self.points.clear()
+        self.total_angle = 0.0
+        self.last_angle = None
+        self.center = None
+        self.current_radius = 0.0
+
+    def update(self, point, current_time=None):
+        if current_time is None:
+            current_time = time.monotonic()
+
+        if current_time - self.last_trigger_time < self.cooldown:
+            return False, {
+                "revolutions": 0.0,
+                "progress": 0.0,
+                "center": None,
+                "radius": 0.0,
+                "direction": None
+            }
+
+        if point is None:
+            if current_time - self.last_point_time > self.max_inactivity:
+                self.reset()
+            revs = abs(self.total_angle) / (2.0 * math.pi)
+            return False, {
+                "revolutions": revs,
+                "progress": min(1.0, revs / self.target_revolutions),
+                "center": self.center,
+                "radius": self.current_radius,
+                "direction": "CW" if self.total_angle < 0 else ("CCW" if self.total_angle > 0 else None)
+            }
+
+        if self.points and (current_time - self.last_point_time > self.max_inactivity):
+            self.reset()
+
+        self.last_point_time = current_time
+        px, py = point
+
+        if self.points:
+            last_x, last_y, _ = self.points[-1]
+            if math.hypot(px - last_x, py - last_y) < 3.0:
+                revs = abs(self.total_angle) / (2.0 * math.pi)
+                return False, {
+                    "revolutions": revs,
+                    "progress": min(1.0, revs / self.target_revolutions),
+                    "center": self.center,
+                    "radius": self.current_radius,
+                    "direction": "CW" if self.total_angle < 0 else ("CCW" if self.total_angle > 0 else None)
+                }
+
+        self.points.append((px, py, current_time))
+
+        if len(self.points) < 8:
+            return False, {
+                "revolutions": 0.0,
+                "progress": 0.0,
+                "center": None,
+                "radius": 0.0,
+                "direction": None
+            }
+
+        recent_pts = [p for p in self.points if current_time - p[2] <= 2.0]
+        if len(recent_pts) < 6:
+            recent_pts = list(self.points)
+
+        xs = [p[0] for p in recent_pts]
+        ys = [p[1] for p in recent_pts]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        w = max_x - min_x
+        h = max_y - min_y
+
+        cx = (min_x + max_x) / 2.0
+        cy = (min_y + max_y) / 2.0
+        self.center = (int(cx), int(cy))
+
+        avg_radius = (w + h) / 4.0
+        self.current_radius = avg_radius
+
+        aspect = (w / h) if h > 0 else 0
+        if avg_radius < self.min_radius or aspect < 0.35 or aspect > 2.85:
+            self.total_angle *= 0.95
+            self.last_angle = None
+            revs = abs(self.total_angle) / (2.0 * math.pi)
+            return False, {
+                "revolutions": revs,
+                "progress": min(1.0, revs / self.target_revolutions),
+                "center": self.center,
+                "radius": self.current_radius,
+                "direction": None
+            }
+
+        current_angle = math.atan2(py - cy, px - cx)
+
+        if self.last_angle is not None:
+            dtheta = current_angle - self.last_angle
+            dtheta = (dtheta + math.pi) % (2.0 * math.pi) - math.pi
+
+            if abs(dtheta) < math.pi * 0.6:
+                if abs(self.total_angle) > math.pi * 0.5:
+                    existing_sign = 1 if self.total_angle > 0 else -1
+                    delta_sign = 1 if dtheta > 0 else -1
+                    if existing_sign != delta_sign and abs(dtheta) > 0.15:
+                        self.total_angle *= 0.85
+                    else:
+                        self.total_angle += dtheta
+                else:
+                    self.total_angle += dtheta
+
+        self.last_angle = current_angle
+
+        revolutions = abs(self.total_angle) / (2.0 * math.pi)
+        progress = min(1.0, revolutions / self.target_revolutions)
+        direction = "CW" if self.total_angle < 0 else ("CCW" if self.total_angle > 0 else None)
+
+        triggered = False
+        if revolutions > self.target_revolutions:
+            triggered = True
+            self.last_trigger_time = current_time
+            self.reset()
+
+        return triggered, {
+            "revolutions": revolutions,
+            "progress": progress,
+            "center": self.center,
+            "radius": self.current_radius,
+            "direction": direction
+        }
