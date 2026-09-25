@@ -7,6 +7,8 @@ WINDOW_NAME = "Calcinterim - Air Drawing Prototype"
 CAMERA_INDEX = 0
 CAMERA_WIDTH = 1280
 CAMERA_HEIGHT = 720
+CAMERA_FPS = 30
+CAMERA_THREADED = True
 
 # MediaPipe
 MODEL_PATH = "hand_landmarker.task"

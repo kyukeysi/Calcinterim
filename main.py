@@ -15,6 +15,8 @@ from config import (
     CAMERA_HEIGHT,
     CAMERA_INDEX,
     CAMERA_WIDTH,
+    CAMERA_FPS,
+    CAMERA_THREADED,
     COMMIT_RELEASE_FRAMES,
     MODEL_PATH,
     OPEN_PALM_CLEAR_FRAMES,
@@ -727,7 +729,13 @@ def draw_challenge_ui(
     result_text=None,
     wrong_answer=False,
     difficulty="easy",
-    wrong_reason=None
+    wrong_reason=None,
+    total_elapsed=0.0,
+    win_score=10,
+    integral_step=0,
+    integral_problem_data=None,
+    integral_fa_submitted=None,
+    integral_fb_submitted=None
 ):
     """
     Draws the challenge UI overlay directly onto the frame.
@@ -784,19 +792,19 @@ def draw_challenge_ui(
         thickness=2
     )
 
-    # 2. SCORE
-    score_text = f"SCORE: {challenge_score}"
+    # 2. SCORE  (e.g. "SCORE: 3/10")
+    score_text = f"SCORE: {challenge_score}/{win_score}"
     put_clean_text(
         score_text,
-        (width - 320, 45),
+        (width - 340, 45),
         scale=0.75,
         color=(180, 240, 255),
         thickness=2
     )
 
-    # 3. TIMER
+    # 3a. Per-question countdown timer
     time_seconds = int(time_remaining + 0.999)
-    timer_text = f"TIME: {time_seconds}s"
+    timer_text = f"Q:{time_seconds}s"
     if time_seconds > 30:
         timer_color = (255, 255, 255)
     elif time_seconds > 15:
@@ -806,15 +814,82 @@ def draw_challenge_ui(
 
     put_clean_text(
         timer_text,
-        (width - 150, 45),
-        scale=0.75,
+        (width - 175, 45),
+        scale=0.7,
         color=timer_color,
+        thickness=2
+    )
+
+    # 3b. Total session stopwatch (counts up)
+    total_mins = int(total_elapsed) // 60
+    total_secs = int(total_elapsed) % 60
+    total_cs   = int((total_elapsed % 1) * 100)
+    total_text = f"{total_mins:02d}:{total_secs:02d}.{total_cs:02d}"
+    put_clean_text(
+        total_text,
+        (width - 340, 80),
+        scale=0.65,
+        color=(255, 220, 100),
         thickness=2
     )
 
     # RULE / INSTRUCTION (for Hard mode alternative operations)
     instruction = problem.get("instruction") if problem else None
-    if instruction:
+
+    if diff_lower == "integral" and integral_problem_data is not None and result_text is None:
+        # --- Integral step-by-step guide ---
+        pd = integral_problem_data
+        a_str = str(pd["a"])
+        b_str = str(pd["b"])
+        fx_str = str(pd["antiderivative"])
+
+        # Show F(x) antiderivative
+        put_clean_text(
+            f"F(x) = {fx_str}",
+            (30, 80),
+            scale=0.62,
+            color=(255, 200, 80),
+            thickness=2
+        )
+
+        # Step indicators
+        step_labels = [
+            f"STEP 1: Enter F({a_str})",
+            f"STEP 2: Enter F({b_str})",
+            f"STEP 3: Enter F({b_str}) - F({a_str})",
+        ]
+        step_colors_done  = (100, 255, 100)
+        step_color_active = (255, 220, 60)
+        step_color_idle   = (160, 160, 160)
+
+        sy = 110
+        for i, lbl in enumerate(step_labels):
+            if i < integral_step:
+                sc = step_colors_done
+                prefix = "✓ "
+                # show submitted value
+                if i == 0 and integral_fa_submitted is not None:
+                    lbl += f" = {integral_fa_submitted}"
+                elif i == 1 and integral_fb_submitted is not None:
+                    lbl += f" = {integral_fb_submitted}"
+            elif i == integral_step:
+                sc = step_color_active
+                prefix = "► "
+            else:
+                sc = step_color_idle
+                prefix = "  "
+            put_clean_text(
+                prefix + lbl,
+                (30, sy),
+                scale=0.58,
+                color=sc,
+                thickness=2
+            )
+            sy += 28
+
+        entered_y = sy + 5
+
+    elif instruction:
         put_clean_text(
             f"RULE: {instruction}",
             (30, 80),
@@ -854,49 +929,144 @@ def draw_challenge_ui(
 
     # Result notification in the center of the frame (no background box)
     if result_text is not None:
-        if result_text == "WIN":
+        if result_text == "COMPLETE":
+            # Full-session victory banner
+            t_mins = int(total_elapsed) // 60
+            t_secs = int(total_elapsed) % 60
+            t_cs   = int((total_elapsed % 1) * 100)
+            time_str = f"{t_mins:02d}:{t_secs:02d}.{t_cs:02d}"
+
+            # Dark translucent overlay so text pops
+            overlay = frame.copy()
+            cv2.rectangle(overlay, (0, 0), (width, height), (0, 0, 0), -1)
+            frame[:] = cv2.addWeighted(overlay, 0.55, frame, 0.45, 0)
+
+            banner_text = "CHALLENGE COMPLETE!"
+            banner_size = cv2.getTextSize(
+                banner_text, cv2.FONT_HERSHEY_SIMPLEX, 1.9, 4
+            )[0]
+            put_clean_text(
+                banner_text,
+                ((width - banner_size[0]) // 2, height // 2 - 60),
+                scale=1.9,
+                color=(80, 255, 120),
+                thickness=4
+            )
+
+            score_line = f"SCORE: {challenge_score}/{win_score}"
+            score_sz = cv2.getTextSize(
+                score_line, cv2.FONT_HERSHEY_SIMPLEX, 1.1, 2
+            )[0]
+            put_clean_text(
+                score_line,
+                ((width - score_sz[0]) // 2, height // 2 + 5),
+                scale=1.1,
+                color=(180, 240, 255),
+                thickness=2
+            )
+
+            time_line = f"FINAL TIME: {time_str}"
+            time_sz = cv2.getTextSize(
+                time_line, cv2.FONT_HERSHEY_SIMPLEX, 1.2, 3
+            )[0]
+            put_clean_text(
+                time_line,
+                ((width - time_sz[0]) // 2, height // 2 + 65),
+                scale=1.2,
+                color=(255, 215, 80),
+                thickness=3
+            )
+
+            hint_text = "Press ESC to exit"
+            hint_sz = cv2.getTextSize(
+                hint_text, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 1
+            )[0]
+            put_clean_text(
+                hint_text,
+                ((width - hint_sz[0]) // 2, height // 2 + 115),
+                scale=0.6,
+                color=(200, 200, 200),
+                thickness=1
+            )
+
+        elif result_text == "WIN":
             main_text = "CORRECT!"
-            sub_text = f"+1 POINT! Score: {challenge_score}"
+            sub_text = f"+1 POINT! Score: {challenge_score}/{win_score}"
             main_color = (100, 255, 100)
+
+            main_size = cv2.getTextSize(
+                main_text,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1.8,
+                3
+            )[0]
+            main_x = (width - main_size[0]) // 2
+            main_y = height // 2 - 10
+
+            put_clean_text(
+                main_text,
+                (main_x, main_y),
+                scale=1.8,
+                color=main_color,
+                thickness=3
+            )
+
+            sub_size = cv2.getTextSize(
+                sub_text,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.85,
+                2
+            )[0]
+            sub_x = (width - sub_size[0]) // 2
+            sub_y = main_y + 45
+
+            put_clean_text(
+                sub_text,
+                (sub_x, sub_y),
+                scale=0.85,
+                color=(240, 240, 240),
+                thickness=2
+            )
+
         else:
             main_text = "TIME'S UP!"
             ans_str = problem["answer"] if problem else "?"
             sub_text = f"Expected answer: {ans_str}"
             main_color = (80, 80, 255)
 
-        main_size = cv2.getTextSize(
-            main_text,
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.8,
-            3
-        )[0]
-        main_x = (width - main_size[0]) // 2
-        main_y = height // 2 - 10
+            main_size = cv2.getTextSize(
+                main_text,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1.8,
+                3
+            )[0]
+            main_x = (width - main_size[0]) // 2
+            main_y = height // 2 - 10
 
-        put_clean_text(
-            main_text,
-            (main_x, main_y),
-            scale=1.8,
-            color=main_color,
-            thickness=3
-        )
+            put_clean_text(
+                main_text,
+                (main_x, main_y),
+                scale=1.8,
+                color=main_color,
+                thickness=3
+            )
 
-        sub_size = cv2.getTextSize(
-            sub_text,
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.85,
-            2
-        )[0]
-        sub_x = (width - sub_size[0]) // 2
-        sub_y = main_y + 45
+            sub_size = cv2.getTextSize(
+                sub_text,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.85,
+                2
+            )[0]
+            sub_x = (width - sub_size[0]) // 2
+            sub_y = main_y + 45
 
-        put_clean_text(
-            sub_text,
-            (sub_x, sub_y),
-            scale=0.85,
-            color=(240, 240, 240),
-            thickness=2
-        )
+            put_clean_text(
+                sub_text,
+                (sub_x, sub_y),
+                scale=0.85,
+                color=(240, 240, 240),
+                thickness=2
+            )
 
 
 def draw_calculator_ui(
@@ -1221,7 +1391,9 @@ def main():
         camera_index=CAMERA_INDEX,
         width=CAMERA_WIDTH,
         height=CAMERA_HEIGHT,
-        mirror=MIRROR_CAMERA
+        fps=CAMERA_FPS,
+        mirror=MIRROR_CAMERA,
+        threaded=CAMERA_THREADED
     )
 
     hand_tracker = None
@@ -1283,6 +1455,21 @@ def main():
         challenge_result_time = None
         challenge_wrong_answer = False
         challenge_wrong_reason = None
+        # Total session stopwatch: records time.monotonic() when session starts,
+        # None when no session is active.
+        challenge_session_start = None
+        challenge_session_elapsed = 0.0   # frozen once COMPLETE
+        CHALLENGE_WIN_SCORE = 10
+
+        # --- Integral challenge multi-step state ---
+        # step 0 = player must enter F(a)
+        # step 1 = player must enter F(b)
+        # step 2 = player must enter F(b) - F(a)  (final answer)
+        integral_challenge_step = 0
+        integral_fa_submitted = None   # confirmed F(a) value (string)
+        integral_fb_submitted = None   # confirmed F(b) value (string)
+        # Precomputed values for the current integral challenge problem
+        integral_problem_data = None   # dict: antiderivative, fa, fb, result
 
         # --- Audio setup (Avengers theme & sound effects) ---
         _sound_dir = os.path.join(
@@ -1347,12 +1534,65 @@ def main():
             if _PYGAME_AVAILABLE and _swoosh_sound is not None:
                 _swoosh_sound.play()
 
+        def _compute_integral_problem_data(problem):
+            """
+            Given an integral challenge problem dict with keys:
+              integrand, lower_bound, upper_bound, answer
+            Precomputes (using sympy):
+              antiderivative F(x), F(a)=F(lower), F(b)=F(upper), result=F(b)-F(a)
+            Returns a dict or None on failure.
+            """
+            if problem is None or "integrand" not in problem:
+                return None
+            try:
+                import sympy as sp
+                from sympy.parsing.sympy_parser import (
+                    parse_expr,
+                    standard_transformations,
+                    implicit_multiplication_application,
+                )
+                x = sp.Symbol("x")
+                expr_str = (
+                    str(problem["integrand"])
+                    .replace("×", "*")
+                    .replace("÷", "/")
+                    .replace("^", "**")
+                )
+                trans = standard_transformations + (
+                    implicit_multiplication_application,
+                )
+                integrand = parse_expr(
+                    expr_str,
+                    local_dict={"x": x},
+                    transformations=trans,
+                    evaluate=True
+                )
+                antiderivative = sp.simplify(sp.integrate(integrand, x))
+                a = sp.sympify(problem["lower_bound"])
+                b = sp.sympify(problem["upper_bound"])
+                fa = sp.simplify(antiderivative.subs(x, a))
+                fb = sp.simplify(antiderivative.subs(x, b))
+                result = sp.simplify(fb - fa)
+                return {
+                    "antiderivative": antiderivative,
+                    "a": a,
+                    "b": b,
+                    "fa": fa,
+                    "fb": fb,
+                    "result": result,
+                }
+            except Exception:
+                return None
+
         def start_challenge_session(diff="easy"):
             nonlocal challenge_mode, challenge_selecting, challenge_difficulty
             nonlocal challenge_problem, challenge_result, challenge_result_time
             nonlocal challenge_wrong_answer, challenge_wrong_reason
             nonlocal integral_mode, training_mode, selected_training_symbol
             nonlocal answer, integral_steps, integral_bound_mode
+            nonlocal challenge_session_start, challenge_session_elapsed
+            nonlocal integral_challenge_step, integral_fa_submitted
+            nonlocal integral_fb_submitted, integral_problem_data
 
             challenge_selecting = False
             challenge_mode = True
@@ -1363,7 +1603,6 @@ def main():
             selected_training_symbol = None
 
             challenge_problem = get_random_problem(difficulty=challenge_difficulty)
-            game_state.start_challenge(challenge_problem)
 
             challenge_timer.reset()
             challenge_timer.set_duration(60)
@@ -1373,6 +1612,20 @@ def main():
             challenge_result_time = None
             challenge_wrong_answer = False
             challenge_wrong_reason = None
+
+            # Reset score and start total stopwatch
+            game_state.reset_challenge()
+            game_state.start_challenge(challenge_problem)
+            challenge_session_start = time.monotonic()
+            challenge_session_elapsed = 0.0
+
+            # Precompute F(a), F(b) for integral challenge
+            integral_challenge_step = 0
+            integral_fa_submitted = None
+            integral_fb_submitted = None
+            integral_problem_data = _compute_integral_problem_data(
+                challenge_problem
+            ) if challenge_difficulty == "integral" else None
 
             math_engine.clear()
             game_state.clear_tokens()
@@ -1401,6 +1654,9 @@ def main():
             )
             print(
                 f"Solve it within {challenge_timer.duration} seconds!"
+            )
+            print(
+                f"First to score {CHALLENGE_WIN_SCORE} wins!"
             )
 
         # --- Circle gesture detector (> 4 circles to enter challenge) ---
@@ -1716,21 +1972,82 @@ def main():
                             )
 
                         elif challenge_mode and not lower_bound_text and not upper_bound_text:
-                            answer = (
-                                math_engine
-                                .get_answer_text()
-                            )
-
-                            if answer is None:
+                            # --- Integral challenge multi-step submission ---
+                            raw = math_engine.get_answer_text()
+                            if raw is None:
                                 print(
-                                    "Could not evaluate expression: "
+                                    "Could not evaluate: "
                                     f"{math_engine.get_display_expression()}"
                                 )
                             else:
-                                print(
-                                    "Challenge answer submitted: "
-                                    f"{math_engine.get_display_expression()} = {answer}"
-                                )
+                                # Helper: check if user value == expected sympy value
+                                def _int_step_ok(user_str, expected_sym):
+                                    import sympy as _sp
+                                    try:
+                                        uv = _sp.sympify(str(user_str))
+                                        return _sp.simplify(uv - expected_sym) == 0
+                                    except Exception:
+                                        return False
+
+                                pd = integral_problem_data
+                                if pd is None:
+                                    # Fallback: no precomputed data, accept any evaluation
+                                    answer = raw
+                                    print(f"Answer submitted: {raw}")
+
+                                elif integral_challenge_step == 0:
+                                    # Step 1: expecting F(a)
+                                    if _int_step_ok(raw, pd["fa"]):
+                                        integral_fa_submitted = raw
+                                        integral_challenge_step = 1
+                                        math_engine.clear()
+                                        game_state.clear_tokens()
+                                        play_correct_sound()
+                                        print(
+                                            f"F({pd['a']}) = {raw} ✓  "
+                                            "Now enter F(b)."
+                                        )
+                                    else:
+                                        play_wrong_sound()
+                                        challenge_wrong_answer = True
+                                        challenge_wrong_reason = (
+                                            f"F({pd['a']}) is wrong"
+                                        )
+                                        print(
+                                            f"Incorrect F({pd['a']}). "
+                                            f"Got {raw}, expected {pd['fa']}."
+                                        )
+
+                                elif integral_challenge_step == 1:
+                                    # Step 2: expecting F(b)
+                                    if _int_step_ok(raw, pd["fb"]):
+                                        integral_fb_submitted = raw
+                                        integral_challenge_step = 2
+                                        math_engine.clear()
+                                        game_state.clear_tokens()
+                                        play_correct_sound()
+                                        print(
+                                            f"F({pd['b']}) = {raw} ✓  "
+                                            "Now enter F(b) - F(a)."
+                                        )
+                                    else:
+                                        play_wrong_sound()
+                                        challenge_wrong_answer = True
+                                        challenge_wrong_reason = (
+                                            f"F({pd['b']}) is wrong"
+                                        )
+                                        print(
+                                            f"Incorrect F({pd['b']}). "
+                                            f"Got {raw}, expected {pd['fb']}."
+                                        )
+
+                                else:
+                                    # Step 3: expecting F(b) - F(a) = final answer
+                                    answer = raw
+                                    print(
+                                        f"Final answer submitted: "
+                                        f"{math_engine.get_display_expression()} = {answer}"
+                                    )
 
                         elif not lower_bound_text:
                             answer = None
@@ -1944,54 +2261,82 @@ def main():
                                 challenge_result
                                 == "WIN"
                             ):
-                                challenge_problem = (
-                                    get_random_problem(
-                                        difficulty=challenge_difficulty,
-                                        exclude=(
-                                            challenge_problem
+                                # Check if player reached the win score
+                                if game_state.challenge_score >= CHALLENGE_WIN_SCORE:
+                                    # Session complete — stay in challenge_mode
+                                    # so COMPLETE banner keeps rendering;
+                                    # ESC exits.
+                                    challenge_result = "COMPLETE"
+                                    challenge_result_time = None  # don't auto-advance
+                                    stop_challenge_music()
+                                    play_correct_sound()
+                                    print(
+                                        f"CHALLENGE COMPLETE! "
+                                        f"Final score: {game_state.challenge_score}/{CHALLENGE_WIN_SCORE} "
+                                        f"in {challenge_session_elapsed:.2f}s"
+                                    )
+
+                                else:
+                                    challenge_problem = (
+                                        get_random_problem(
+                                            difficulty=challenge_difficulty,
+                                            exclude=(
+                                                challenge_problem
+                                            )
                                         )
                                     )
-                                )
 
-                                game_state.start_challenge(
-                                    challenge_problem
-                                )
+                                    game_state.start_challenge(
+                                        challenge_problem
+                                    )
 
-                                challenge_timer.reset()
-                                challenge_timer.set_duration(
-                                    60
-                                )
-                                challenge_timer.start()
+                                    challenge_timer.reset()
+                                    challenge_timer.set_duration(
+                                        60
+                                    )
+                                    challenge_timer.start()
 
-                                challenge_result = None
-                                challenge_result_time = (
-                                    None
-                                )
-                                challenge_wrong_answer = False
-                                challenge_wrong_reason = None
+                                    challenge_result = None
+                                    challenge_result_time = (
+                                        None
+                                    )
+                                    challenge_wrong_answer = False
+                                    challenge_wrong_reason = None
 
-                                math_engine.clear()
-                                game_state.clear_tokens()
+                                    math_engine.clear()
+                                    game_state.clear_tokens()
 
-                                lower_bound_tokens.clear()
-                                upper_bound_tokens.clear()
+                                    lower_bound_tokens.clear()
+                                    upper_bound_tokens.clear()
 
-                                integral_bound_mode = None
+                                    integral_bound_mode = None
 
-                                answer = None
-                                integral_steps = None
+                                    answer = None
+                                    integral_steps = None
 
-                                clear_visuals(
-                                    stroke_manager,
-                                    glow_renderer,
-                                    particle_system,
-                                    spell_ring
-                                )
+                                    # Reset integral multi-step state
+                                    integral_challenge_step = 0
+                                    integral_fa_submitted = None
+                                    integral_fb_submitted = None
+                                    integral_problem_data = (
+                                        _compute_integral_problem_data(
+                                            challenge_problem
+                                        )
+                                        if challenge_difficulty == "integral"
+                                        else None
+                                    )
 
-                                print(
-                                    "New challenge! "
-                                    f"{challenge_problem['display']}"
-                                )
+                                    clear_visuals(
+                                        stroke_manager,
+                                        glow_renderer,
+                                        particle_system,
+                                        spell_ring
+                                    )
+
+                                    print(
+                                        "New challenge! "
+                                        f"{challenge_problem['display']}"
+                                    )
 
                             else:
                                 challenge_mode = False
@@ -2004,6 +2349,7 @@ def main():
                                 challenge_wrong_reason = None
 
                                 challenge_timer.reset()
+                                challenge_session_start = None
 
                                 game_state.reset_challenge()
 
@@ -2047,11 +2393,16 @@ def main():
                         challenge_timer.stop()
 
                         game_state.set_challenge_win()
+                        # Freeze the session elapsed time immediately on win
+                        if challenge_session_start is not None:
+                            challenge_session_elapsed = (
+                                time.monotonic() - challenge_session_start
+                            )
                         play_correct_sound()
 
                         print(
                             "Correct! Challenge won! "
-                            f"Score: {game_state.challenge_score}"
+                            f"Score: {game_state.challenge_score}/{CHALLENGE_WIN_SCORE}"
                         )
 
                     else:
@@ -2118,6 +2469,13 @@ def main():
                 if challenge_selecting:
                     draw_difficulty_select_ui(frame)
                 elif challenge_mode:
+                    # Compute live total elapsed (frozen once COMPLETE)
+                    if challenge_result == "COMPLETE":
+                        _total_elapsed = challenge_session_elapsed
+                    elif challenge_session_start is not None:
+                        _total_elapsed = time.monotonic() - challenge_session_start
+                    else:
+                        _total_elapsed = 0.0
                     draw_challenge_ui(
                         frame,
                         challenge_problem,
@@ -2131,7 +2489,13 @@ def main():
                         challenge_result,
                         challenge_wrong_answer,
                         difficulty=challenge_difficulty,
-                        wrong_reason=challenge_wrong_reason
+                        wrong_reason=challenge_wrong_reason,
+                        total_elapsed=_total_elapsed,
+                        win_score=CHALLENGE_WIN_SCORE,
+                        integral_step=integral_challenge_step,
+                        integral_problem_data=integral_problem_data,
+                        integral_fa_submitted=integral_fa_submitted,
+                        integral_fb_submitted=integral_fb_submitted
                     )
                 else:
                     draw_calculator_ui(
@@ -2178,6 +2542,7 @@ def main():
                     challenge_result_time = None
                     challenge_problem = None
                     challenge_timer.reset()
+                    challenge_session_start = None
                     game_state.reset_challenge()
 
                     clear_visuals(
@@ -2609,21 +2974,77 @@ def main():
                         )
 
                     elif challenge_mode and not lower_bound_text and not upper_bound_text:
-                        answer = (
-                            math_engine
-                            .get_answer_text()
-                        )
+                            # --- Integral challenge multi-step submission (keyboard) ---
+                            raw = math_engine.get_answer_text()
+                            if raw is None:
+                                print(
+                                    "Could not evaluate expression: "
+                                    f"{math_engine.get_display_expression()}"
+                                )
+                            else:
+                                def _int_step_ok_k(user_str, expected_sym):
+                                    import sympy as _sp
+                                    try:
+                                        uv = _sp.sympify(str(user_str))
+                                        return _sp.simplify(uv - expected_sym) == 0
+                                    except Exception:
+                                        return False
 
-                        if answer is None:
-                            print(
-                                "Could not evaluate expression: "
-                                f"{math_engine.get_display_expression()}"
-                            )
-                        else:
-                            print(
-                                "Challenge answer submitted: "
-                                f"{math_engine.get_display_expression()} = {answer}"
-                            )
+                                pd = integral_problem_data
+                                if pd is None:
+                                    answer = raw
+                                    print(f"Answer submitted: {raw}")
+
+                                elif integral_challenge_step == 0:
+                                    if _int_step_ok_k(raw, pd["fa"]):
+                                        integral_fa_submitted = raw
+                                        integral_challenge_step = 1
+                                        math_engine.clear()
+                                        game_state.clear_tokens()
+                                        play_correct_sound()
+                                        print(
+                                            f"F({pd['a']}) = {raw} ✓  "
+                                            "Now enter F(b)."
+                                        )
+                                    else:
+                                        play_wrong_sound()
+                                        challenge_wrong_answer = True
+                                        challenge_wrong_reason = (
+                                            f"F({pd['a']}) is wrong"
+                                        )
+                                        print(
+                                            f"Incorrect F({pd['a']}). "
+                                            f"Got {raw}, expected {pd['fa']}."
+                                        )
+
+                                elif integral_challenge_step == 1:
+                                    if _int_step_ok_k(raw, pd["fb"]):
+                                        integral_fb_submitted = raw
+                                        integral_challenge_step = 2
+                                        math_engine.clear()
+                                        game_state.clear_tokens()
+                                        play_correct_sound()
+                                        print(
+                                            f"F({pd['b']}) = {raw} ✓  "
+                                            "Now enter F(b) - F(a)."
+                                        )
+                                    else:
+                                        play_wrong_sound()
+                                        challenge_wrong_answer = True
+                                        challenge_wrong_reason = (
+                                            f"F({pd['b']}) is wrong"
+                                        )
+                                        print(
+                                            f"Incorrect F({pd['b']}). "
+                                            f"Got {raw}, expected {pd['fb']}."
+                                        )
+
+                                else:
+                                    answer = raw
+                                    print(
+                                        f"Final answer submitted: "
+                                        f"{math_engine.get_display_expression()} = {answer}"
+                                    )
 
                     elif not lower_bound_text:
                         answer = None

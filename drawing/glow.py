@@ -22,9 +22,18 @@ class GlowRenderer:
             (height, width, 4),
             dtype=np.uint8
         )
+        self.has_content = False
+        self.bbox = None
 
     def clear(self):
-        self.trail.fill(0)
+        if self.has_content:
+            if self.bbox is not None:
+                x1, y1, x2, y2 = self.bbox
+                self.trail[y1:y2, x1:x2] = 0
+            else:
+                self.trail.fill(0)
+            self.has_content = False
+            self.bbox = None
 
     def draw_spell_line(self, point_a, point_b):
         x1, y1 = int(point_a[0]), int(point_a[1])
@@ -57,27 +66,43 @@ class GlowRenderer:
             cv2.LINE_AA
         )
 
+        self.has_content = True
+        pad = self.glow_size + 16
+        x_min = max(0, min(x1, x2) - pad)
+        y_min = max(0, min(y1, y2) - pad)
+        x_max = min(self.width, max(x1, x2) + pad)
+        y_max = min(self.height, max(y1, y2) + pad)
+
+        if self.bbox is None:
+            self.bbox = [x_min, y_min, x_max, y_max]
+        else:
+            self.bbox[0] = min(self.bbox[0], x_min)
+            self.bbox[1] = min(self.bbox[1], y_min)
+            self.bbox[2] = max(self.bbox[2], x_max)
+            self.bbox[3] = max(self.bbox[3], y_max)
+
     def render(self, frame):
-        glow_layer = self.trail[:, :, :3]
+        if not self.has_content or self.bbox is None:
+            return frame
 
-        blurred = cv2.GaussianBlur(
-            glow_layer,
-            (0, 0),
-            12
-        )
+        x1, y1, x2, y2 = self.bbox
+        if x2 <= x1 or y2 <= y1:
+            return frame
 
-        alpha = self.trail[:, :, 3].astype(np.float32) / 255.0
+        roi_trail = self.trail[y1:y2, x1:x2]
+        roi_frame = frame[y1:y2, x1:x2]
 
-        alpha = alpha[:, :, np.newaxis]
+        trail_bgr = roi_trail[:, :, :3]
+        small = cv2.resize(trail_bgr, (0, 0), fx=0.5, fy=0.5, interpolation=cv2.INTER_LINEAR)
+        blurred_small = cv2.GaussianBlur(small, (0, 0), 6)
+        blurred = cv2.resize(blurred_small, (roi_trail.shape[1], roi_trail.shape[0]), interpolation=cv2.INTER_LINEAR)
 
-        frame_float = frame.astype(np.float32)
-        glow_float = blurred.astype(np.float32)
+        alpha = (roi_trail[:, :, 3].astype(np.uint16) * 140) >> 8
+        alpha = alpha[:, :, None]
+        inv_alpha = 255 - alpha
 
-        result = (
-            frame_float * (1.0 - alpha * 0.55)
-            + glow_float * (alpha * 0.55)
-        )
+        blended = ((roi_frame.astype(np.uint16) * inv_alpha + blurred.astype(np.uint16) * alpha) >> 8).astype(np.uint8)
 
-        result = np.clip(result, 0, 255).astype(np.uint8)
-
+        result = frame.copy()
+        result[y1:y2, x1:x2] = blended
         return result

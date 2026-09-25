@@ -191,6 +191,7 @@ class GameState:
     def reset_challenge(self):
         self.status = GameStatus.READY
         self.challenge_problem = None
+        self.challenge_score = 0
 
     def is_playing(self):
         return self.status == GameStatus.PLAYING
