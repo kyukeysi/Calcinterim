@@ -24,6 +24,7 @@ class GameState:
 
         self.challenge_problem = None
         self.challenge_score = 0
+        self.last_check_reason = None
 
     def start_round(self, target_expression):
         self.status = GameStatus.PLAYING
@@ -34,25 +35,27 @@ class GameState:
         self.status = GameStatus.CHALLENGE
         self.challenge_problem = problem
         self.player_tokens.clear()
+        self.last_check_reason = None
 
     def check_challenge_answer(
         self,
-        user_answer
+        user_answer,
+        user_expression=None
     ):
         """
-        Checks if the user's computed answer
-        matches the challenge problem's expected
-        answer. Uses sympy simplify for robustness.
+        Checks if the user's computed answer matches the challenge problem's expected
+        answer. If the problem specifies required_symbols (e.g. for alternative operation mode),
+        verifies that the user's expression used at least one of those required symbols.
 
-        Returns True if the answer matches.
+        Returns True if the answer matches and satisfies all constraints.
         """
+        self.last_check_reason = None
 
-        if self.challenge_problem is None:
+        if self.challenge_problem is None or user_answer is None:
+            self.last_check_reason = "NO_ANSWER"
             return False
 
-        if user_answer is None:
-            return False
-
+        # First, verify the mathematical value matches
         expected = self.challenge_problem["answer"]
 
         try:
@@ -63,14 +66,66 @@ class GameState:
                 user_value - expected_value
             )
 
-            return difference == 0
+            if difference != 0:
+                self.last_check_reason = "WRONG_VALUE"
+                return False
 
         except (
             sp.SympifyError,
             ValueError,
             TypeError
         ):
+            self.last_check_reason = "PARSE_ERROR"
             return False
+
+        # Check alternative operation requirement (e.g. must use multiplication)
+        required_symbols = self.challenge_problem.get("required_symbols")
+        required_op = self.challenge_problem.get("required_op")
+        if required_symbols or required_op:
+            expr_str = str(user_expression) if user_expression is not None else ""
+            has_required_op = False
+
+            if required_symbols:
+                has_required_op = any(sym in expr_str for sym in required_symbols)
+
+            # If required_op is MULTIPLICATION, check if parentheses form valid implicit multiplication
+            # e.g., 5(2), (5)(2), 2(5), etc.
+            if required_op == "MULTIPLICATION":
+                if any(s in expr_str for s in ["*", "×", "x"]):
+                    has_required_op = True
+                elif "(" in expr_str or ")" in expr_str:
+                    try:
+                        from sympy.parsing.sympy_parser import (
+                            parse_expr,
+                            standard_transformations,
+                            implicit_multiplication_application,
+                        )
+                        clean = (
+                            expr_str
+                            .replace("×", "*")
+                            .replace("÷", "/")
+                            .replace("^", "**")
+                            .replace("²", "**2")
+                        )
+                        trans = standard_transformations + (
+                            implicit_multiplication_application,
+                        )
+                        parsed_ast = parse_expr(clean, transformations=trans, evaluate=False)
+                        has_required_op = any(
+                            isinstance(node, sp.Mul)
+                            for node in sp.preorder_traversal(parsed_ast)
+                        )
+                    except Exception:
+                        has_required_op = True
+                else:
+                    has_required_op = False
+
+            if not has_required_op:
+                self.last_check_reason = "MISSING_OP"
+                return False
+
+        self.last_check_reason = "CORRECT"
+        return True
 
     def set_challenge_win(self):
         self.status = GameStatus.CHALLENGE_WIN

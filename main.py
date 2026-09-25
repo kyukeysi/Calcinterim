@@ -669,13 +669,17 @@ def draw_integral_steps(
 def draw_difficulty_select_ui(frame):
     """
     Renders an interactive difficulty selection screen for Challenge Mode.
+    Options:
+      [1] EASY: Basic algebra & arithmetic
+      [2] HARD: Alternative operations
+      [3] INTEGRAL: Calculus & definite integrals
     """
     height, width = frame.shape[:2]
 
     # Semi-transparent dark card
     overlay = frame.copy()
-    box_w = 700
-    box_h = 360
+    box_w = 720
+    box_h = 425
     x1 = (width - box_w) // 2
     y1 = (height - box_h) // 2
     x2 = x1 + box_w
@@ -684,7 +688,7 @@ def draw_difficulty_select_ui(frame):
     cv2.rectangle(overlay, (x1, y1), (x2, y2), (18, 20, 26), -1)
     cv2.addWeighted(overlay, 0.88, frame, 0.12, 0, frame)
 
-    # Glowing Cyan / Gold border
+    # Glowing Cyan border
     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 215, 255), 2, cv2.LINE_AA)
 
     def center_text(text, y_pos, scale=0.8, color=(255, 255, 255), thickness=2):
@@ -693,20 +697,24 @@ def draw_difficulty_select_ui(frame):
         cv2.putText(frame, text, (x, y_pos), cv2.FONT_HERSHEY_SIMPLEX, scale, (0, 0, 0), thickness + 2, cv2.LINE_AA)
         cv2.putText(frame, text, (x, y_pos), cv2.FONT_HERSHEY_SIMPLEX, scale, color, thickness, cv2.LINE_AA)
 
-    center_text("CHALLENGE MODE", y1 + 50, scale=1.1, color=(0, 215, 255), thickness=3)
-    center_text("SELECT DIFFICULTY", y1 + 88, scale=0.7, color=(200, 240, 255), thickness=2)
+    center_text("CHALLENGE MODE", y1 + 45, scale=1.05, color=(0, 215, 255), thickness=3)
+    center_text("SELECT DIFFICULTY", y1 + 78, scale=0.68, color=(200, 240, 255), thickness=2)
 
     # Option 1: EASY
-    center_text("[ 1 ]  EASY  -  Basic Algebra & Arithmetic", y1 + 145, scale=0.82, color=(100, 255, 130), thickness=2)
-    center_text("Addition, subtraction, multiplication, exponents & parentheses", y1 + 172, scale=0.52, color=(180, 230, 190), thickness=1)
+    center_text("[ 1 ]  EASY  -  Basic Algebra & Arithmetic", y1 + 130, scale=0.78, color=(100, 255, 130), thickness=2)
+    center_text("Direct arithmetic evaluation (e.g., 4 x 5, 2 + 3, (2 + 3) x 4)", y1 + 155, scale=0.50, color=(180, 230, 190), thickness=1)
 
     # Option 2: HARD
-    center_text("[ 2 ]  HARD  -  Calculus & Definite Integrals", y1 + 225, scale=0.82, color=(100, 140, 255), thickness=2)
-    center_text("Integrals with lower & upper bounds", y1 + 252, scale=0.52, color=(190, 190, 240), thickness=1)
+    center_text("[ 2 ]  HARD  -  Alternative Operations", y1 + 205, scale=0.78, color=(80, 200, 255), thickness=2)
+    center_text("Solve using a different operation (e.g., 2+2 -> use MULTIPLICATION or ())", y1 + 230, scale=0.50, color=(180, 220, 245), thickness=1)
+
+    # Option 3: INTEGRAL
+    center_text("[ 3 ]  INTEGRAL  -  Calculus & Definite Integrals", y1 + 280, scale=0.78, color=(255, 140, 100), thickness=2)
+    center_text("Definite integrals with lower & upper bounds", y1 + 305, scale=0.50, color=(240, 190, 180), thickness=1)
 
     # Instructions
-    center_text("Press [1] or [2] on keyboard  (or draw 1 or 2)", y1 + 305, scale=0.62, color=(255, 255, 255), thickness=2)
-    center_text("Press [G] for Easy  |  Press [ESC] to Cancel", y1 + 333, scale=0.52, color=(160, 160, 160), thickness=1)
+    center_text("Press [1], [2], or [3] on keyboard  (or draw 1, 2, or 3)", y1 + 365, scale=0.60, color=(255, 255, 255), thickness=2)
+    center_text("Press [G] for Easy  |  Press [ESC] to Cancel", y1 + 395, scale=0.50, color=(160, 160, 160), thickness=1)
 
 
 def draw_challenge_ui(
@@ -718,16 +726,17 @@ def draw_challenge_ui(
     answer=None,
     result_text=None,
     wrong_answer=False,
-    difficulty="easy"
+    difficulty="easy",
+    wrong_reason=None
 ):
     """
-    Draws the minimal integral challenge UI overlay directly onto the frame.
+    Draws the challenge UI overlay directly onto the frame.
     Displays:
-      1. Given (the challenge problem + difficulty badge)
+      1. Given (challenge problem + difficulty badge)
       2. Score
       3. Timer
-      4. Numbers entered
-    No background color or rectangle is rendered behind the text.
+      4. Rule / Constraint (if in Hard alternative operations mode)
+      5. Numbers entered & verification status
     """
     height, width = frame.shape[:2]
 
@@ -755,8 +764,17 @@ def draw_challenge_ui(
 
     # 1. GIVEN + DIFFICULTY BADGE
     problem_display = problem["display"] if problem else "-"
-    diff_tag = " [EASY]" if difficulty == "easy" else " [HARD]"
-    diff_color = (120, 255, 120) if difficulty == "easy" else (100, 150, 255)
+    diff_lower = str(difficulty).lower()
+    if diff_lower == "easy":
+        diff_tag = " [EASY]"
+        diff_color = (120, 255, 120)
+    elif diff_lower == "hard":
+        diff_tag = " [HARD]"
+        diff_color = (80, 200, 255)
+    else:
+        diff_tag = " [INTEGRAL]"
+        diff_color = (255, 140, 100)
+
     given_text = f"GIVEN{diff_tag}: {problem_display}"
     put_clean_text(
         given_text,
@@ -794,6 +812,20 @@ def draw_challenge_ui(
         thickness=2
     )
 
+    # RULE / INSTRUCTION (for Hard mode alternative operations)
+    instruction = problem.get("instruction") if problem else None
+    if instruction:
+        put_clean_text(
+            f"RULE: {instruction}",
+            (30, 80),
+            scale=0.65,
+            color=(0, 225, 255),
+            thickness=2
+        )
+        entered_y = 118
+    else:
+        entered_y = 85
+
     # 4. NUMBERS ENTERED
     if numbers_entered:
         entered_display = numbers_entered
@@ -804,14 +836,17 @@ def draw_challenge_ui(
 
     entered_text = f"ENTERED: {entered_display}"
     if wrong_answer and result_text is None:
-        entered_text += "  (INCORRECT)"
+        if wrong_reason:
+            entered_text += f"  ({wrong_reason})"
+        else:
+            entered_text += "  (INCORRECT)"
         entered_color = (100, 140, 255)
     else:
         entered_color = (130, 255, 200)
 
     put_clean_text(
         entered_text,
-        (30, 85),
+        (30, entered_y),
         scale=0.75,
         color=entered_color,
         thickness=2
@@ -1247,27 +1282,47 @@ def main():
         challenge_result = None
         challenge_result_time = None
         challenge_wrong_answer = False
+        challenge_wrong_reason = None
 
-        # --- Audio setup (Avengers theme for Challenge Mode) ---
+        # --- Audio setup (Avengers theme & sound effects) ---
         _sound_dir = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "sound"
         )
-        _avengers_path = os.path.join(
-            _sound_dir, "Avengers.mp3"
-        )
+        _avengers_path = os.path.join(_sound_dir, "Avengers.mp3")
+        _correct_path = os.path.join(_sound_dir, "Correct_Sound.mp3")
+        _wrong_path = os.path.join(_sound_dir, "Wrong_Sound.mp3")
+        _swoosh_path = os.path.join(_sound_dir, "Swoosh_Sound.mp3")
+
         _music_loaded = False
+        _correct_sound = None
+        _wrong_sound = None
+        _swoosh_sound = None
+
         if _PYGAME_AVAILABLE:
             try:
-                pygame.mixer.init()
+                if not pygame.mixer.get_init():
+                    pygame.mixer.init()
+
                 if os.path.exists(_avengers_path):
                     pygame.mixer.music.load(_avengers_path)
                     _music_loaded = True
                     print("Avengers theme loaded.")
                 else:
-                    print(
-                        "Warning: sound/Avengers.mp3 not found."
-                    )
+                    print("Warning: sound/Avengers.mp3 not found.")
+
+                if os.path.exists(_correct_path):
+                    _correct_sound = pygame.mixer.Sound(_correct_path)
+                    print("Correct sound effect loaded.")
+
+                if os.path.exists(_wrong_path):
+                    _wrong_sound = pygame.mixer.Sound(_wrong_path)
+                    print("Wrong sound effect loaded.")
+
+                if os.path.exists(_swoosh_path):
+                    _swoosh_sound = pygame.mixer.Sound(_swoosh_path)
+                    print("Swoosh sound effect loaded.")
+
             except Exception as _e:
                 print(f"Audio init failed: {_e}")
 
@@ -1280,9 +1335,22 @@ def main():
                 if pygame.mixer.music.get_busy():
                     pygame.mixer.music.stop()
 
+        def play_correct_sound():
+            if _PYGAME_AVAILABLE and _correct_sound is not None:
+                _correct_sound.play()
+
+        def play_wrong_sound():
+            if _PYGAME_AVAILABLE and _wrong_sound is not None:
+                _wrong_sound.play()
+
+        def play_swoosh_sound():
+            if _PYGAME_AVAILABLE and _swoosh_sound is not None:
+                _swoosh_sound.play()
+
         def start_challenge_session(diff="easy"):
             nonlocal challenge_mode, challenge_selecting, challenge_difficulty
-            nonlocal challenge_problem, challenge_result, challenge_result_time, challenge_wrong_answer
+            nonlocal challenge_problem, challenge_result, challenge_result_time
+            nonlocal challenge_wrong_answer, challenge_wrong_reason
             nonlocal integral_mode, training_mode, selected_training_symbol
             nonlocal answer, integral_steps, integral_bound_mode
 
@@ -1290,7 +1358,7 @@ def main():
             challenge_mode = True
             challenge_difficulty = diff
 
-            integral_mode = (challenge_difficulty == "hard")
+            integral_mode = (challenge_difficulty == "integral")
             training_mode = False
             selected_training_symbol = None
 
@@ -1304,6 +1372,7 @@ def main():
             challenge_result = None
             challenge_result_time = None
             challenge_wrong_answer = False
+            challenge_wrong_reason = None
 
             math_engine.clear()
             game_state.clear_tokens()
@@ -1434,7 +1503,7 @@ def main():
                 print(
                     "Circle gesture detected! "
                     "Challenge selection opened. "
-                    "Select difficulty: [1] Easy or [2] Hard"
+                    "Select difficulty: [1] Easy, [2] Hard, or [3] Integral"
                 )
 
             if action == "DRAW":
@@ -1488,10 +1557,12 @@ def main():
                             start_challenge_session("easy")
                         elif token == "2":
                             start_challenge_session("hard")
+                        elif token == "3":
+                            start_challenge_session("integral")
                         else:
                             print(
                                 f"Recognized '{token}'. "
-                                "Draw '1' for Easy or '2' for Hard."
+                                "Draw '1' for Easy, '2' for Hard, or '3' for Integral."
                             )
 
                     elif training_mode:
@@ -1537,6 +1608,7 @@ def main():
                         )
 
                         if token is not None:
+                            play_swoosh_sound()
                             if (
                                 integral_mode
                                 and integral_bound_mode
@@ -1577,6 +1649,7 @@ def main():
                                 answer = None
                                 integral_steps = None
                                 challenge_wrong_answer = False
+                                challenge_wrong_reason = None
 
                                 print(
                                     "Stroke committed: "
@@ -1613,6 +1686,7 @@ def main():
                     answer = None
                     integral_steps = None
                     challenge_wrong_answer = False
+                    challenge_wrong_reason = None
 
                 spell_ring.set_visible(
                     False
@@ -1894,6 +1968,7 @@ def main():
                                     None
                                 )
                                 challenge_wrong_answer = False
+                                challenge_wrong_reason = None
 
                                 math_engine.clear()
                                 game_state.clear_tokens()
@@ -1926,6 +2001,7 @@ def main():
                                     None
                                 )
                                 challenge_wrong_answer = False
+                                challenge_wrong_reason = None
 
                                 challenge_timer.reset()
 
@@ -1944,28 +2020,34 @@ def main():
                         time.monotonic()
                     )
                     challenge_wrong_answer = False
+                    challenge_wrong_reason = None
 
                     challenge_timer.stop()
 
                     game_state.set_challenge_lose()
+                    play_wrong_sound()
 
                     print(
                         "Time's up! Challenge failed."
                     )
 
                 elif answer is not None:
+                    user_expr = math_engine.get_display_expression()
                     if game_state.check_challenge_answer(
-                        answer
+                        answer,
+                        user_expression=user_expr
                     ):
                         challenge_result = "WIN"
                         challenge_result_time = (
                             time.monotonic()
                         )
                         challenge_wrong_answer = False
+                        challenge_wrong_reason = None
 
                         challenge_timer.stop()
 
                         game_state.set_challenge_win()
+                        play_correct_sound()
 
                         print(
                             "Correct! Challenge won! "
@@ -1973,6 +2055,16 @@ def main():
                         )
 
                     else:
+                        if not challenge_wrong_answer:
+                            play_wrong_sound()
+                            if game_state.last_check_reason == "MISSING_OP":
+                                req_op = challenge_problem.get("required_op", "OPERATION") if challenge_problem else "OPERATION"
+                                challenge_wrong_reason = f"MUST USE {req_op}"
+                                print(
+                                    f"Answer value matches, but must use {req_op}!"
+                                )
+                            else:
+                                challenge_wrong_reason = "INCORRECT"
                         challenge_wrong_answer = True
 
             particle_system.update()
@@ -2038,7 +2130,8 @@ def main():
                         answer,
                         challenge_result,
                         challenge_wrong_answer,
-                        difficulty=challenge_difficulty
+                        difficulty=challenge_difficulty,
+                        wrong_reason=challenge_wrong_reason
                     )
                 else:
                     draw_calculator_ui(
@@ -2144,6 +2237,9 @@ def main():
                 elif key == ord("2"):
                     start_challenge_session("hard")
                     continue
+                elif key == ord("3"):
+                    start_challenge_session("integral")
+                    continue
                 elif key == ord("g"):
                     start_challenge_session("easy")
                     continue
@@ -2202,7 +2298,7 @@ def main():
                     challenge_selecting = True
                     print(
                         "Challenge difficulty selection opened. "
-                        "Press 1 for Easy (Algebra) or 2 for Hard (Calculus)."
+                        "Press 1 for Easy, 2 for Hard (Alt Operations), or 3 for Integral."
                     )
                 elif challenge_selecting:
                     start_challenge_session("easy")
@@ -2221,6 +2317,8 @@ def main():
 
                     challenge_result = None
                     challenge_result_time = None
+                    challenge_wrong_answer = False
+                    challenge_wrong_reason = None
 
                     math_engine.clear()
                     game_state.clear_tokens()

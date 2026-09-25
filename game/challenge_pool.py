@@ -189,25 +189,245 @@ CHALLENGE_PROBLEMS = [
 ]
 
 
+HARD_PROBLEMS = [
+    {
+        "display": "2 + 2",
+        "answer": 4,
+        "type": "hard",
+        "required_op": "MULTIPLICATION",
+        "required_symbols": ["*", "×", "x", "(", ")"],
+        "instruction": "Get the answer by using MULTIPLICATION (x or ())",
+    },
+    {
+        "display": "3 + 3",
+        "answer": 6,
+        "type": "hard",
+        "required_op": "MULTIPLICATION",
+        "required_symbols": ["*", "×", "x", "(", ")"],
+        "instruction": "Get the answer by using MULTIPLICATION (x or ())",
+    },
+    {
+        "display": "4 + 4",
+        "answer": 8,
+        "type": "hard",
+        "required_op": "MULTIPLICATION",
+        "required_symbols": ["*", "×", "x", "(", ")"],
+        "instruction": "Get the answer by using MULTIPLICATION (x or ())",
+    },
+    {
+        "display": "5 + 5",
+        "answer": 10,
+        "type": "hard",
+        "required_op": "MULTIPLICATION",
+        "required_symbols": ["*", "×", "x", "(", ")"],
+        "instruction": "Get the answer by using MULTIPLICATION (x or ())",
+    },
+    {
+        "display": "6 + 6",
+        "answer": 12,
+        "type": "hard",
+        "required_op": "MULTIPLICATION",
+        "required_symbols": ["*", "×", "x", "(", ")"],
+        "instruction": "Get the answer by using MULTIPLICATION (x or ())",
+    },
+    {
+        "display": "8 + 8",
+        "answer": 16,
+        "type": "hard",
+        "required_op": "MULTIPLICATION",
+        "required_symbols": ["*", "×", "x", "(", ")"],
+        "instruction": "Get the answer by using MULTIPLICATION (x or ())",
+    },
+    {
+        "display": "10 + 10",
+        "answer": 20,
+        "type": "hard",
+        "required_op": "MULTIPLICATION",
+        "required_symbols": ["*", "×", "x", "(", ")"],
+        "instruction": "Get the answer by using MULTIPLICATION (x or ())",
+    },
+    {
+        "display": "3 x 3",
+        "answer": 9,
+        "type": "hard",
+        "required_op": "ADDITION",
+        "required_symbols": ["+"],
+        "instruction": "Get the answer by using ADDITION",
+    },
+    {
+        "display": "4 x 2",
+        "answer": 8,
+        "type": "hard",
+        "required_op": "ADDITION",
+        "required_symbols": ["+"],
+        "instruction": "Get the answer by using ADDITION",
+    },
+    {
+        "display": "5 x 2",
+        "answer": 10,
+        "type": "hard",
+        "required_op": "ADDITION",
+        "required_symbols": ["+"],
+        "instruction": "Get the answer by using ADDITION",
+    },
+    {
+        "display": "3 x 4",
+        "answer": 12,
+        "type": "hard",
+        "required_op": "ADDITION",
+        "required_symbols": ["+"],
+        "instruction": "Get the answer by using ADDITION",
+    },
+    {
+        "display": "4 x 4",
+        "answer": 16,
+        "type": "hard",
+        "required_op": "ADDITION",
+        "required_symbols": ["+"],
+        "instruction": "Get the answer by using ADDITION",
+    },
+    {
+        "display": "5 x 3",
+        "answer": 15,
+        "type": "hard",
+        "required_op": "ADDITION",
+        "required_symbols": ["+"],
+        "instruction": "Get the answer by using ADDITION",
+    },
+    {
+        "display": "6 x 2",
+        "answer": 12,
+        "type": "hard",
+        "required_op": "SUBTRACTION",
+        "required_symbols": ["-"],
+        "instruction": "Get the answer by using SUBTRACTION",
+    },
+    {
+        "display": "20 - 10",
+        "answer": 10,
+        "type": "hard",
+        "required_op": "MULTIPLICATION",
+        "required_symbols": ["*", "×", "x", "(", ")"],
+        "instruction": "Get the answer by using MULTIPLICATION (x or ())",
+    },
+    {
+        "display": "15 - 9",
+        "answer": 6,
+        "type": "hard",
+        "required_op": "MULTIPLICATION",
+        "required_symbols": ["*", "×", "x", "(", ")"],
+        "instruction": "Get the answer by using MULTIPLICATION (x or ())",
+    },
+    {
+        "display": "25 - 9",
+        "answer": 16,
+        "type": "hard",
+        "required_op": "MULTIPLICATION",
+        "required_symbols": ["*", "×", "x", "(", ")"],
+        "instruction": "Get the answer by using MULTIPLICATION (x or ())",
+    },
+    {
+        "display": "20 - 5",
+        "answer": 15,
+        "type": "hard",
+        "required_op": "MULTIPLICATION",
+        "required_symbols": ["*", "×", "x", "(", ")"],
+        "instruction": "Get the answer by using MULTIPLICATION (x or ())",
+    },
+    {
+        "display": "20 / 4",
+        "answer": 5,
+        "type": "hard",
+        "required_op": "SUBTRACTION",
+        "required_symbols": ["-"],
+        "instruction": "Get the answer by using SUBTRACTION",
+    },
+    {
+        "display": "18 / 3",
+        "answer": 6,
+        "type": "hard",
+        "required_op": "SUBTRACTION",
+        "required_symbols": ["-"],
+        "instruction": "Get the answer by using SUBTRACTION",
+    },
+    {
+        "display": "16 / 2",
+        "answer": 8,
+        "type": "hard",
+        "required_op": "SUBTRACTION",
+        "required_symbols": ["-"],
+        "instruction": "Get the answer by using SUBTRACTION",
+    },
+    {
+        "display": "24 / 6",
+        "answer": 4,
+        "type": "hard",
+        "required_op": "SUBTRACTION",
+        "required_symbols": ["-"],
+        "instruction": "Get the answer by using SUBTRACTION",
+    },
+    {
+        "display": "30 / 5",
+        "answer": 6,
+        "type": "hard",
+        "required_op": "ADDITION",
+        "required_symbols": ["+"],
+        "instruction": "Get the answer by using ADDITION",
+    },
+    {
+        "display": "2^3",
+        "answer": 8,
+        "type": "hard",
+        "required_op": "ADDITION",
+        "required_symbols": ["+"],
+        "instruction": "Get the answer by using ADDITION",
+    },
+    {
+        "display": "3^2",
+        "answer": 9,
+        "type": "hard",
+        "required_op": "SUBTRACTION",
+        "required_symbols": ["-"],
+        "instruction": "Get the answer by using SUBTRACTION",
+    },
+    {
+        "display": "4^2",
+        "answer": 16,
+        "type": "hard",
+        "required_op": "MULTIPLICATION",
+        "required_symbols": ["*", "×", "x", "(", ")"],
+        "instruction": "Get the answer by using MULTIPLICATION (x or ())",
+    },
+]
+
+
 def get_random_problem(difficulty="easy", exclude=None):
     """
     Returns a random problem from the pool.
 
     Parameters:
         difficulty: "easy" for basic algebra/arithmetic,
-                    "hard" for calculus integrals.
+                    "hard" for alternative operation algebra,
+                    "integral" (or "calculus") for calculus integrals.
         exclude: optionally exclude a problem dict so the same
                  problem isn't repeated consecutively.
     """
     if isinstance(difficulty, dict):
         exclude = difficulty
-        difficulty = "hard" if "integrand" in exclude else "easy"
+        if "integrand" in exclude:
+            difficulty = "integral"
+        elif "required_op" in exclude:
+            difficulty = "hard"
+        else:
+            difficulty = "easy"
 
-    pool = (
-        EASY_PROBLEMS
-        if str(difficulty).lower() == "easy"
-        else CHALLENGE_PROBLEMS
-    )
+    diff_str = str(difficulty).lower()
+    if diff_str == "hard":
+        pool = HARD_PROBLEMS
+    elif diff_str in ("integral", "calculus"):
+        pool = CHALLENGE_PROBLEMS
+    else:
+        pool = EASY_PROBLEMS
 
     available = pool
 
