@@ -31,6 +31,15 @@ class MathEngine:
     def get_display_expression(self):
         return "".join(self.tokens)
 
+    def auto_close_parentheses(self, expression):
+        if not expression:
+            return ""
+        open_count = expression.count("(")
+        close_count = expression.count(")")
+        if open_count > close_count:
+            expression = expression + (")" * (open_count - close_count))
+        return expression
+
     def build_expression(self):
         expression = self.get_display_expression()
 
@@ -47,6 +56,9 @@ class MathEngine:
         if not expression:
             return None
 
+        # Automatically close any unclosed parentheses (e.g. 5(2 -> 5(2))
+        expression = self.auto_close_parentheses(expression)
+
         try:
             x = sp.Symbol("x")
 
@@ -57,19 +69,19 @@ class MathEngine:
                 )
             )
 
-            return parse_expr(
+            result = parse_expr(
                 expression,
                 local_dict={"x": x},
                 transformations=transformations,
                 evaluate=True
             )
 
-        except (
-            sp.SympifyError,
-            ValueError,
-            TypeError,
-            SyntaxError
-        ):
+            if not isinstance(result, sp.Basic):
+                return None
+
+            return result
+
+        except Exception:
             return None
 
     def calculate(self):
@@ -246,8 +258,9 @@ class MathEngine:
                 )
             )
 
+            target_str = self.auto_close_parentheses(target_expression)
             target = parse_expr(
-                target_expression,
+                target_str,
                 local_dict={"x": x},
                 transformations=transformations,
                 evaluate=True
@@ -259,10 +272,5 @@ class MathEngine:
 
             return difference == 0
 
-        except (
-            sp.SympifyError,
-            ValueError,
-            TypeError,
-            SyntaxError
-        ):
+        except Exception:
             return False

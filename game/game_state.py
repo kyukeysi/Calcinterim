@@ -107,6 +107,10 @@ class GameState:
                             .replace("^", "**")
                             .replace("²", "**2")
                         )
+                        open_p = clean.count("(")
+                        close_p = clean.count(")")
+                        if open_p > close_p:
+                            clean = clean + (")" * (open_p - close_p))
                         trans = standard_transformations + (
                             implicit_multiplication_application,
                         )
